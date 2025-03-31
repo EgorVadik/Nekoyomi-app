@@ -1,21 +1,51 @@
+import { Picker, PickerItem } from '@/components/ui/picker'
+import { filterAtom } from '@/lib/atoms'
+import { GENRES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import BottomSheet, {
     BottomSheetBackdrop,
     BottomSheetView,
 } from '@gorhom/bottom-sheet'
 import { Stack, usePathname, useRouter } from 'expo-router'
+import { useSetAtom } from 'jotai'
 import { Clock, Heart, ListFilter } from 'lucide-react-native'
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Text, TouchableOpacity, View } from 'react-native'
 
 export default function BrowseLayout() {
     const router = useRouter()
     const pathname = usePathname()
     const bottomSheetRef = useRef<BottomSheet>(null)
+    const [order, setOrder] = useState<'Latest' | 'Newest' | 'Top read'>(
+        'Latest',
+    )
+    const [status, setStatus] = useState<'All' | 'Ongoing' | 'Completed'>('All')
+    const [category, setCategory] = useState<(typeof GENRES)[number]>('All')
+    const setFilters = useSetAtom(filterAtom)
 
     const handleSnapPress = useCallback((index: number) => {
         bottomSheetRef.current?.expand()
     }, [])
+
+    const handleReset = () => {
+        setFilters({
+            filter: undefined,
+            genre: null,
+        })
+    }
+
+    const handleFilter = () => {
+        const _order = order.split(' ').at(0)?.toLowerCase() as
+            | 'latest'
+            | 'newest'
+            | 'top'
+        const _status = status.toLowerCase() as 'all' | 'ongoing' | 'completed'
+
+        setFilters({
+            filter: `${_order}-${_status}`,
+            genre: category,
+        })
+    }
 
     return (
         <View className='flex-1 bg-[#121218]'>
@@ -134,12 +164,15 @@ export default function BrowseLayout() {
                 backgroundStyle={{ backgroundColor: '#1a1c23' }}
                 handleComponent={() => (
                     <View className='flex-row items-center justify-between rounded-t-2xl border-b border-[#2e2d33] bg-[#121218] px-4 py-2'>
-                        <TouchableOpacity>
+                        <TouchableOpacity onPress={handleReset}>
                             <Text className='font-bold text-[#a9c8fc]'>
                                 Reset
                             </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity className='rounded-full bg-[#a9c8fc] px-6 py-3'>
+                        <TouchableOpacity
+                            onPress={handleFilter}
+                            className='rounded-full bg-[#a9c8fc] px-6 py-3'
+                        >
                             <Text className='font-medium text-black'>
                                 Filter
                             </Text>
@@ -148,35 +181,31 @@ export default function BrowseLayout() {
                 )}
             >
                 <BottomSheetView className='flex-1 bg-[#1a1c23] p-4'>
-                    <Text className='mb-4 text-xl font-semibold text-white'>
-                        Filters
-                    </Text>
-
                     <FilterSelect
                         label='Order by'
                         value='Latest'
                         options={['Latest', 'Newest', 'Top read']}
-                        onSelect={(value) => console.log(value)}
+                        onSelect={(value) =>
+                            setOrder(value as 'Latest' | 'Newest' | 'Top read')
+                        }
                     />
 
                     <FilterSelect
                         label='Status'
-                        value='ALL'
-                        options={['ALL', 'Ongoing', 'Completed']}
-                        onSelect={(value) => console.log(value)}
+                        value='All'
+                        options={['All', 'Ongoing', 'Completed']}
+                        onSelect={(value) =>
+                            setStatus(value as 'All' | 'Ongoing' | 'Completed')
+                        }
                     />
 
                     <FilterSelect
                         label='Category'
-                        value='ALL'
-                        options={[
-                            'ALL',
-                            'Action',
-                            'Romance',
-                            'Comedy',
-                            'Drama',
-                        ]}
-                        onSelect={(value) => console.log(value)}
+                        value='All'
+                        options={GENRES as unknown as string[]}
+                        onSelect={(value) =>
+                            setCategory(value as (typeof GENRES)[number])
+                        }
                     />
                 </BottomSheetView>
             </BottomSheet>
@@ -193,18 +222,28 @@ type FilterSelectProps = {
 
 function FilterSelect({ label, value, options, onSelect }: FilterSelectProps) {
     return (
-        <View className='mb-4'>
-            <Text className='mb-2 text-sm text-white'>{label}</Text>
-            <TouchableOpacity
-                className='rounded-lg border border-[#797882] bg-[#1F1F29] p-3'
-                onPress={() => {
-                    const currentIndex = options.indexOf(value)
-                    const nextIndex = (currentIndex + 1) % options.length
-                    onSelect(options[nextIndex])
-                }}
+        <View className='relative my-4'>
+            <Text className='absolute -top-3 left-3 z-10 bg-[#1F1F29] px-1 text-sm font-medium text-[#e5e1e8]'>
+                {label}
+            </Text>
+            <Picker
+                selectedValue={value}
+                onValueChange={(itemValue) => onSelect(itemValue)}
+                className='rounded border border-[#e5e1e8]'
             >
-                <Text className='text-white'>{value}</Text>
-            </TouchableOpacity>
+                {options.map((option) => (
+                    <PickerItem
+                        key={option}
+                        label={option}
+                        value={option}
+                        color='#fff'
+                        style={{
+                            backgroundColor: '#45474e',
+                            width: '100%',
+                        }}
+                    />
+                ))}
+            </Picker>
         </View>
     )
 }

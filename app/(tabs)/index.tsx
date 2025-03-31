@@ -15,7 +15,7 @@ export default function LibraryScreen() {
     return (
         <View className='flex-1 bg-[#121218]'>
             <FlatList
-                data={data}
+                data={data?.data}
                 renderItem={({ item }) => <MangaCard item={item} />}
                 keyExtractor={(item) => item.title}
                 numColumns={2}

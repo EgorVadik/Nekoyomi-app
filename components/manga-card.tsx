@@ -8,11 +8,11 @@ export const MangaCard = ({ item }: { item: Manga }) => {
             <View className='relative overflow-hidden rounded-md bg-gray-800'>
                 <Image
                     source={{
-                        // uri: item.cover,
-                        uri: 'https://zjcdn.mangahere.org/store/manga/33018/154.0/cosmpressed/c000.jpg',
-                        // headers: {
-                        //     Referer: 'https://www.mangakakalot.gg/',
-                        // },
+                        uri: item.cover,
+                        // uri: 'https://zjcdn.mangahere.org/store/manga/33018/154.0/cosmpressed/c000.jpg',
+                        headers: {
+                            Referer: 'https://www.mangakakalot.gg/',
+                        },
                     }}
                     className='aspect-[2/3] w-full'
                     resizeMode='cover'

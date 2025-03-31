@@ -1,3 +1,10 @@
+export type MangaResponse = {
+    data: Manga[]
+    lastPage: number
+    hasNextPage: boolean
+    nextPage: number
+}
+
 export type Manga = {
     cover?: string
     title: string

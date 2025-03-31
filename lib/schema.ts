@@ -24,9 +24,11 @@ export const mangaSchema = z
 export const searchSchema = z
     .object({
         query: z.string().trim().min(1),
+        page: z.number().int().positive().default(1),
     })
-    .transform(({ query }) => ({
+    .transform(({ query, page }) => ({
         query: snakeCase(query),
+        page,
     }))
 
 export const filteredMangaSchema = z

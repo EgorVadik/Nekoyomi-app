@@ -4,7 +4,12 @@ import type {
     MangaSchema,
     SearchSchema,
 } from '@/lib/schema'
-import type { ChapterList, Manga, MangaDetails } from '@/lib/types'
+import type {
+    ChapterList,
+    Manga,
+    MangaDetails,
+    MangaResponse,
+} from '@/lib/types'
 import axios from 'axios'
 
 export const api = axios.create({
@@ -12,7 +17,7 @@ export const api = axios.create({
 })
 
 export const getChapterRequest = async (
-    params: Partial<MangaChapterSchema>
+    params: Partial<MangaChapterSchema>,
 ) => {
     const { data } = await api.get<string[]>('/chapter', { params })
     return data
@@ -29,13 +34,13 @@ export const getMangaDetailsRequest = async (params: Partial<MangaSchema>) => {
 }
 
 export const searchMangaRequest = async (params: Partial<SearchSchema>) => {
-    const { data } = await api.get<Manga[]>('/search', { params })
+    const { data } = await api.get<MangaResponse>('/search', { params })
     return data
 }
 
 export const getFilteredMangaListRequest = async (
-    params: Partial<FilteredMangaSchema>
+    params: Partial<FilteredMangaSchema>,
 ) => {
-    const { data } = await api.get<Manga[]>('/list', { params })
+    const { data } = await api.get<MangaResponse>('/list', { params })
     return data
 }

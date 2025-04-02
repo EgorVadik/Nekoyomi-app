@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1743500431934,
+      "tag": "0000_funny_zaran",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1743502908470,
+      "tag": "0001_glossy_lionheart",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1743504106780,
+      "tag": "0002_wakeful_lenny_balinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1743504599843,
+      "tag": "0003_aromatic_leader",
+      "breakpoints": true
+    }
+  ]
+}

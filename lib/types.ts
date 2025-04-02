@@ -6,23 +6,24 @@ export type MangaResponse = {
 }
 
 export type Manga = {
+    slug: string
     cover?: string
     title: string
     link?: string
 }
 
+export type NameWithLink = {
+    name: string
+    link?: string
+}
+
 export type MangaDetails = Omit<Manga, 'link'> & {
-    author: {
-        name: string
-        link?: string
-    }
+    author: NameWithLink
     status?: string
     lastUpdated: Date | null
-    genres: {
-        name: string
-        link?: string
-    }[]
+    genres: NameWithLink[]
     description: string
+    chapters: ChapterList
 }
 
 export type ChapterList = {
@@ -31,5 +32,6 @@ export type ChapterList = {
         link?: string
         timeUploaded: Date | null
         title: string
+        slug: string
     }[]
 }

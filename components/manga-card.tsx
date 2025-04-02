@@ -1,10 +1,17 @@
 import { Manga } from '@/lib/types'
-import { Image, Text, TouchableOpacity, View } from 'react-native'
+// import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
+import { router } from 'expo-router'
+import { Text, TouchableOpacity, View, Image } from 'react-native'
 
 export const MangaCard = ({ item }: { item: Manga }) => {
     return (
-        <TouchableOpacity className='mb-2 w-1/2 p-1'>
+        <TouchableOpacity
+            className='mb-2 w-1/2 p-1'
+            onPress={() => {
+                router.push(`/manga-details/${encodeURIComponent(item.slug)}`)
+            }}
+        >
             <View className='relative overflow-hidden rounded-md bg-gray-800'>
                 <Image
                     source={{
@@ -18,13 +25,6 @@ export const MangaCard = ({ item }: { item: Manga }) => {
                     resizeMode='cover'
                     alt={item.cover}
                 />
-                {/* {item.isNew && (
-            <View className='absolute top-2 left-2 bg-yellow-500 rounded-full px-2 py-0.5'>
-                <Text className='text-xs font-bold text-black'>
-                    NEW!
-                </Text>
-            </View>
-        )} */}
                 <LinearGradient
                     className='absolute bottom-0 left-0 right-0 flex h-14 items-start justify-end p-2'
                     colors={[

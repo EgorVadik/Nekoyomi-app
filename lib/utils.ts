@@ -13,3 +13,14 @@ export const parseString = (str?: string) =>
 export const cn = (...classes: ClassValue[]) => {
     return twMerge(clsx(classes))
 }
+
+export const removeAllExtraSpaces = (str?: string) =>
+    str
+        ?.split(' ')
+        .filter((item) => item !== '')
+        .join(' ') ?? ''
+
+export const extractNumberFromChapterTitle = (title: string) => {
+    const match = title.match(/\d+/)
+    return match ? parseInt(match[0]) : null
+}

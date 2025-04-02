@@ -1,21 +1,93 @@
 import { MangaCard } from '@/components/manga-card'
-import { getFilteredMangaListRequest } from '@/lib/api'
+import { db } from '@/db'
+import { SavedMangaTable } from '@/db/schema'
 import { useQuery } from '@tanstack/react-query'
-import { FlatList, View } from 'react-native'
+import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
+import { router } from 'expo-router'
+import { AlertCircle, BookOpen, Compass, RefreshCw } from 'lucide-react-native'
+import { useState } from 'react'
+import {
+    ActivityIndicator,
+    FlatList,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native'
 
 export default function LibraryScreen() {
-    const { data, isLoading, error } = useQuery({
-        queryKey: ['filteredMangaList', { type: 'latest' }],
-        queryFn: () =>
-            getFilteredMangaListRequest({
-                type: 'latest',
-            }),
+    const [retry, setRetry] = useState(false)
+    // const { data, error, updatedAt } = useLiveQuery(
+    //     db.select().from(SavedMangaTable),
+    //     [retry],
+    // )
+    const { data, error, isLoading } = useQuery({
+        queryKey: ['saved-manga'],
+        queryFn: () => db.select().from(SavedMangaTable),
     })
+
+    if (isLoading) {
+        return (
+            <View className='flex-1 items-center justify-center bg-[#121218]'>
+                <ActivityIndicator size='large' color='#fff' />
+            </View>
+        )
+    }
+
+    if (error) {
+        return (
+            <View className='flex-1 items-center justify-center gap-4 bg-[#121218] px-4'>
+                <AlertCircle size={64} color='#ef4444' opacity={0.5} />
+                <Text className='text-xl font-semibold text-white'>
+                    Something Went Wrong
+                </Text>
+                <Text
+                    className='text-center text-gray-400'
+                    textBreakStrategy='balanced'
+                >
+                    We couldn't load your library. Please try again later.
+                </Text>
+                <TouchableOpacity
+                    onPress={() => setRetry(!retry)}
+                    className='mt-4 flex-row items-center gap-2 rounded-full bg-[#a9c8fc] px-6 py-3'
+                >
+                    <RefreshCw size={20} color='#1f2937' />
+                    <Text className='font-medium text-gray-800'>Try Again</Text>
+                </TouchableOpacity>
+            </View>
+        )
+    }
+
+    if (data == null || data?.length === 0) {
+        return (
+            <View className='flex-1 items-center justify-center gap-4 bg-[#121218] px-4'>
+                <BookOpen size={64} color='#ffffff' opacity={0.5} />
+                <Text className='text-xl font-semibold text-white'>
+                    Your Library is Empty
+                </Text>
+                <Text
+                    className='text-center text-gray-400'
+                    textBreakStrategy='balanced'
+                >
+                    Start building your collection by browsing and adding manga
+                    to your library
+                </Text>
+                <TouchableOpacity
+                    onPress={() => router.push('/browse')}
+                    className='mt-4 flex-row items-center gap-2 rounded-full bg-[#a9c8fc] px-6 py-3'
+                >
+                    <Compass size={20} color='#1f2937' />
+                    <Text className='font-medium text-gray-800'>
+                        Browse Manga
+                    </Text>
+                </TouchableOpacity>
+            </View>
+        )
+    }
 
     return (
         <View className='flex-1 bg-[#121218]'>
             <FlatList
-                data={data?.data}
+                data={data}
                 renderItem={({ item }) => <MangaCard item={item} />}
                 keyExtractor={(item) => item.title}
                 numColumns={2}

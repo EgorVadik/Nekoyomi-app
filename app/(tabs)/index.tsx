@@ -2,7 +2,6 @@ import { MangaCard } from '@/components/manga-card'
 import { db } from '@/db'
 import { SavedMangaTable } from '@/db/schema'
 import { useQuery } from '@tanstack/react-query'
-import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 import { router } from 'expo-router'
 import { AlertCircle, BookOpen, Compass, RefreshCw } from 'lucide-react-native'
 import { useState } from 'react'
@@ -16,10 +15,6 @@ import {
 
 export default function LibraryScreen() {
     const [retry, setRetry] = useState(false)
-    // const { data, error, updatedAt } = useLiveQuery(
-    //     db.select().from(SavedMangaTable),
-    //     [retry],
-    // )
     const { data, error, isLoading } = useQuery({
         queryKey: ['saved-manga'],
         queryFn: () => db.select().from(SavedMangaTable),

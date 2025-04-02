@@ -152,8 +152,11 @@ export default function MangaDetails() {
                                 source={{ uri: data.cover }}
                                 className='h-44 w-28 rounded-md object-cover object-center'
                             />
-                            <View>
-                                <Text className='mb-2 max-w-[85%] text-2xl font-medium text-white'>
+                            <View className='w-full'>
+                                <Text
+                                    className='mb-2 w-full max-w-[52%] text-2xl font-medium text-white'
+                                    numberOfLines={3}
+                                >
                                     {data.title}
                                 </Text>
                                 <TouchableOpacity className='flex-row items-center gap-1'>

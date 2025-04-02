@@ -36,7 +36,9 @@ export const HistoryTable = sqliteTable('history', {
     }),
     mangaSlug: text('manga_slug').unique().notNull(),
     mangaTitle: text('manga_title').notNull(),
-    chapterNumber: integer('chapter_number').notNull(),
+    mangaCover: text('manga_cover').notNull(),
+    // chapterNumber: integer('chapter_number').notNull(),
+    chapterSlug: text('chapter_slug').notNull(),
     readAt: integer('read_at', { mode: 'timestamp' }).$defaultFn(
         () => new Date(),
     ),

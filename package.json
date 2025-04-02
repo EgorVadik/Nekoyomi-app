@@ -29,6 +29,7 @@
         "axios": "^1.8.4",
         "babel-plugin-inline-import": "^3.0.0",
         "clsx": "^2.1.1",
+        "date-fns": "^4.1.0",
         "drizzle-orm": "^0.41.0",
         "expo": "~52.0.41",
         "expo-constants": "~17.0.8",

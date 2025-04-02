@@ -1,5 +1,9 @@
+import { CustomModal } from '@/components/ui/custom-modal'
+import { db } from '@/db'
+import { HistoryTable } from '@/db/schema'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
-import { Tabs } from 'expo-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Tabs, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import {
     Book,
@@ -10,12 +14,91 @@ import {
     MoreVertical,
     Search,
     Settings,
+    Trash2,
+    X,
 } from 'lucide-react-native'
-import React from 'react'
-import { Text, TouchableOpacity, View } from 'react-native'
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
+import React, { useEffect, useState } from 'react'
+import {
+    BackHandler,
+    Text,
+    TextInput,
+    ToastAndroid,
+    TouchableOpacity,
+    View,
+} from 'react-native'
+import {
+    SafeAreaProvider,
+    SafeAreaView,
+    useSafeAreaInsets,
+} from 'react-native-safe-area-context'
 
 export default function TabsLayout() {
+    const queryClient = useQueryClient()
+    const insets = useSafeAreaInsets()
+    const [showClearDialog, setShowClearDialog] = useState(false)
+    const [isSearchActive, setIsSearchActive] = useState(false)
+
+    const { mutate: clearHistory, isPending } = useMutation({
+        mutationFn: async () => {
+            await db.delete(HistoryTable)
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['history'] })
+            ToastAndroid.show('History cleared', ToastAndroid.SHORT)
+            setShowClearDialog(false)
+        },
+    })
+
+    const handleClearHistory = () => {
+        setShowClearDialog(true)
+    }
+
+    const handleSearch = (text: string) => {
+        queryClient.setQueryData(
+            ['history'],
+            (old: {
+                original: {
+                    title: string
+                    data: (typeof HistoryTable.$inferSelect)[]
+                }[]
+                grouped: {
+                    title: string
+                    data: (typeof HistoryTable.$inferSelect)[]
+                }[]
+            }) => {
+                return {
+                    ...old,
+                    grouped: old.original.map((group) => ({
+                        ...group,
+                        data: group.data.filter((item) =>
+                            item.mangaTitle
+                                .toLowerCase()
+                                .includes(text.toLowerCase()),
+                        ),
+                    })),
+                }
+            },
+        )
+    }
+
+    useEffect(() => {
+        const handler = BackHandler.addEventListener(
+            'hardwareBackPress',
+            () => {
+                if (isSearchActive) {
+                    setIsSearchActive(false)
+                    handleSearch('')
+                    return true
+                }
+                return false
+            },
+        )
+
+        return () => {
+            handler.remove()
+        }
+    }, [isSearchActive])
+
     return (
         <>
             <SafeAreaProvider>
@@ -64,6 +147,60 @@ export default function TabsLayout() {
                         name='history'
                         options={{
                             title: 'History',
+                            headerTransparent: true,
+                            header: () => (
+                                <View
+                                    style={{
+                                        height: 90.6,
+                                        paddingTop: insets.top,
+                                    }}
+                                    className='w-full flex-1 flex-row items-center justify-between gap-2 px-4'
+                                >
+                                    <View className='h-full flex-1 flex-row items-center gap-2'>
+                                        {isSearchActive ? (
+                                            <TextInput
+                                                placeholder='Search...'
+                                                placeholderTextColor={'white'}
+                                                className='h-full flex-1 p-4 text-xl text-white'
+                                                autoFocus
+                                                cursorColor={'white'}
+                                                onChangeText={handleSearch}
+                                            />
+                                        ) : (
+                                            <Text className='text-2xl font-semibold text-white'>
+                                                History
+                                            </Text>
+                                        )}
+                                    </View>
+
+                                    <View className='mr-4 flex-row gap-5'>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setIsSearchActive(
+                                                    !isSearchActive,
+                                                )
+                                                if (isSearchActive) {
+                                                    handleSearch('')
+                                                }
+                                            }}
+                                        >
+                                            {isSearchActive ? (
+                                                <X size={24} color={'white'} />
+                                            ) : (
+                                                <Search
+                                                    size={24}
+                                                    color={'white'}
+                                                />
+                                            )}
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={handleClearHistory}
+                                        >
+                                            <Trash2 size={24} color={'white'} />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ),
                         }}
                     />
                     <Tabs.Screen
@@ -81,6 +218,16 @@ export default function TabsLayout() {
                 </Tabs>
             </SafeAreaProvider>
             <StatusBar style='light' />
+
+            <CustomModal
+                visible={showClearDialog}
+                onClose={() => setShowClearDialog(false)}
+                title='Remove everything'
+                description='Are you sure? All history will be lost.'
+                confirmText='OK'
+                onConfirm={clearHistory}
+                isPending={isPending}
+            />
         </>
     )
 }

@@ -1,0 +1,1 @@
+ALTER TABLE `history` ADD `manga_cover` text NOT NULL;

@@ -3,7 +3,7 @@ import { HistoryTable } from '@/db/schema'
 import { getChapterRequest, getMangaDetailsRequest } from '@/lib/api'
 import { extractNumberFromChapterTitle } from '@/lib/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { eq } from 'drizzle-orm'
 import { Image } from 'expo-image'
 import {
@@ -108,6 +108,7 @@ const MangaPage = memo(
 )
 
 export default function MangaReaderScreen() {
+    const queryClient = useQueryClient()
     const headerHeight = useHeaderHeight()
     const insets = useSafeAreaInsets()
     const { name } = useLocalSearchParams()
@@ -202,10 +203,6 @@ export default function MangaReaderScreen() {
     })
     const { mutate: updateHistory } = useMutation({
         mutationFn: async () => {
-            const chapterNumber =
-                extractNumberFromChapterTitle(currentChapterTitle)
-
-            if (!chapterNumber) return
             if (!mangaDetails) return
 
             const existingHistory = await db.query.HistoryTable.findFirst({
@@ -213,21 +210,34 @@ export default function MangaReaderScreen() {
             })
 
             if (existingHistory) {
-                await db
-                    .update(HistoryTable)
-                    .set({
-                        chapterNumber,
+                try {
+                    await db
+                        .update(HistoryTable)
+                        .set({
+                            chapterSlug: currentChapterTitle,
+                            readAt: new Date(),
+                        })
+                        .where(eq(HistoryTable.id, existingHistory.id))
+                } catch (error) {
+                    console.log(error)
+                }
+            } else {
+                try {
+                    await db.insert(HistoryTable).values({
+                        mangaSlug: name as string,
+                        mangaTitle: mangaDetails.title,
+                        mangaCover: mangaDetails.cover || '',
+                        chapterSlug: currentChapterTitle,
                         readAt: new Date(),
                     })
-                    .where(eq(HistoryTable.id, existingHistory.id))
-            } else {
-                await db.insert(HistoryTable).values({
-                    mangaSlug: name as string,
-                    mangaTitle: mangaDetails.title,
-                    chapterNumber,
-                    readAt: new Date(),
-                })
+                } catch (error) {
+                    console.log(error)
+                }
             }
+
+            await queryClient.invalidateQueries({
+                queryKey: ['history'],
+            })
         },
     })
 
@@ -254,18 +264,6 @@ export default function MangaReaderScreen() {
 
     useEffect(() => {
         updateHistory()
-        // const updateHistory = async () => {
-        //     console.log(
-        //         'update history',
-        //         currentChapterTitle,
-        //         'current date:',
-        //         new Date(),
-        //     )
-
-        //     // await db.
-        // }
-
-        // updateHistory()
     }, [currentChapterTitle])
 
     const calculateDimensions = useCallback(

@@ -22,5 +22,5 @@ export const removeAllExtraSpaces = (str?: string) =>
 
 export const extractNumberFromChapterTitle = (title: string) => {
     const match = title.match(/\d+/)
-    return match ? parseInt(match[0]) : null
+    return match ? parseFloat(match[0]) : null
 }

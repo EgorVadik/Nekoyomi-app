@@ -29,6 +29,27 @@
       "when": 1743504599843,
       "tag": "0003_aromatic_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1743579755403,
+      "tag": "0004_silent_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1743585228596,
+      "tag": "0005_petite_bedlam",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1743585360286,
+      "tag": "0006_steady_lizard",
+      "breakpoints": true
     }
   ]
 }

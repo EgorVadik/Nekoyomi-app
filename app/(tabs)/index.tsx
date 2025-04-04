@@ -1,7 +1,8 @@
 import { MangaCard } from '@/components/manga-card'
 import { db } from '@/db'
-import { SavedMangaTable } from '@/db/schema'
+import { ReadChaptersTable, SavedMangaTable } from '@/db/schema'
 import { useQuery } from '@tanstack/react-query'
+import { inArray } from 'drizzle-orm'
 import { router } from 'expo-router'
 import { AlertCircle, BookOpen, Compass, RefreshCw } from 'lucide-react-native'
 import { useState } from 'react'
@@ -17,7 +18,26 @@ export default function LibraryScreen() {
     const [retry, setRetry] = useState(false)
     const { data, error, isLoading } = useQuery({
         queryKey: ['saved-manga'],
-        queryFn: () => db.select().from(SavedMangaTable),
+        queryFn: async () => {
+            const savedManga = await db.select().from(SavedMangaTable)
+            const readChapters = await db
+                .select()
+                .from(ReadChaptersTable)
+                .where(
+                    inArray(
+                        ReadChaptersTable.mangaSlug,
+                        savedManga.map((manga) => manga.slug),
+                    ),
+                )
+            return savedManga.map((manga) => ({
+                ...manga,
+                unReadChaptersCount:
+                    (manga.chapters?.totalChapters ?? 0) -
+                    readChapters.filter(
+                        (chapter) => chapter.mangaSlug === manga.slug,
+                    ).length,
+            }))
+        },
     })
 
     if (isLoading) {
@@ -83,7 +103,13 @@ export default function LibraryScreen() {
         <View className='flex-1 bg-[#121218]'>
             <FlatList
                 data={data}
-                renderItem={({ item }) => <MangaCard item={item} />}
+                renderItem={({ item }) => (
+                    <MangaCard
+                        item={item}
+                        inLibrary
+                        unReadChaptersCount={item.unReadChaptersCount}
+                    />
+                )}
                 keyExtractor={(item) => item.title}
                 numColumns={2}
                 contentContainerStyle={{ padding: 8 }}

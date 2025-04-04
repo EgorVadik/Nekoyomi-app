@@ -1,0 +1,1 @@
+ALTER TABLE `read_chapters` ADD `current_page` integer NOT NULL;

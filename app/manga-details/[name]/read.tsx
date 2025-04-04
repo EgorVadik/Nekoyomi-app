@@ -1,10 +1,14 @@
 import { db } from '@/db'
-import { HistoryTable } from '@/db/schema'
+import {
+    HistoryTable,
+    ReadChaptersTable,
+    DownloadedChaptersTable,
+} from '@/db/schema'
 import { getChapterRequest, getMangaDetailsRequest } from '@/lib/api'
 import { extractNumberFromChapterTitle } from '@/lib/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { Image } from 'expo-image'
 import {
     Stack,
@@ -43,7 +47,7 @@ const MangaPage = memo(
         retryImageLoad,
         onPress,
     }: {
-        page: string
+        page: { url: string; localPath: string }
         width: number
         height: number
         imageDimensions: { [key: string]: { width: number; height: number } }
@@ -56,47 +60,49 @@ const MangaPage = memo(
     }) => {
         return (
             <TouchableOpacity
-                key={page}
+                key={page.url}
                 activeOpacity={1}
                 onPress={onPress}
                 className='relative w-full'
             >
-                {loadingStates[page] && (
+                {loadingStates[page.url] && (
                     <View
                         className='absolute inset-0 items-center justify-center'
                         style={{
-                            width: imageDimensions[page]?.width || width,
-                            height: imageDimensions[page]?.height || height,
+                            width: imageDimensions[page.url]?.width || width,
+                            height: imageDimensions[page.url]?.height || height,
                         }}
                     >
                         <ActivityIndicator size='large' color='#ffffff' />
                     </View>
                 )}
-                {errorStates[page] && (
+                {errorStates[page.url] && (
                     <View
                         className='absolute inset-0 z-10 items-center justify-center'
                         style={{
-                            width: imageDimensions[page]?.width || width,
-                            height: imageDimensions[page]?.height || height,
+                            width: imageDimensions[page.url]?.width || width,
+                            height: imageDimensions[page.url]?.height || height,
                         }}
                     >
-                        <TouchableOpacity onPress={() => retryImageLoad(page)}>
+                        <TouchableOpacity
+                            onPress={() => retryImageLoad(page.url)}
+                        >
                             <Text className='text-white'>Retry</Text>
                         </TouchableOpacity>
                     </View>
                 )}
                 <Image
                     source={{
-                        uri: page,
+                        uri: page.localPath || page.url,
                         headers: {
                             Referer: 'https://www.mangakakalot.gg/',
                         },
                     }}
                     contentFit='contain'
-                    onLoad={(e) => handleImageLoad(page, e)}
-                    onError={() => handleImageError(page)}
+                    onLoad={(e) => handleImageLoad(page.url, e)}
+                    onError={() => handleImageError(page.url)}
                     style={[
-                        imageDimensions[page] || {
+                        imageDimensions[page.url] || {
                             width: width,
                             height: height,
                         },
@@ -158,7 +164,7 @@ export default function MangaReaderScreen() {
     const [sectionsState, setSectionsState] = useState<{
         data: {
             title: string
-            loadedPages: string[]
+            loadedPages: { url: string; localPath: string }[]
         }[]
         currentChapter: string
         loadedChapters: string[]
@@ -172,6 +178,7 @@ export default function MangaReaderScreen() {
         currentChapter: chapter as string,
         loadedChapters: [chapter as string],
     })
+
     const sections = useMemo(
         () =>
             sectionsState.data.map((section) => ({
@@ -181,20 +188,51 @@ export default function MangaReaderScreen() {
         [sectionsState.data],
     )
 
+    console.log({ sections })
+
     const totalChapterPages = useMemo(() => {
         return sectionsState.data[
             sectionsState.data.findIndex((s) => s.title === currentChapterTitle)
         ]?.loadedPages.length
     }, [sectionsState.data, currentChapterTitle])
 
+    const { data: downloadedChapter, isLoading: isDownloadedChapterLoading } =
+        useQuery({
+            queryKey: ['downloaded-chapter', name, chapter],
+            queryFn: async () => {
+                const result = await db.query.DownloadedChaptersTable.findFirst(
+                    {
+                        where: and(
+                            eq(
+                                DownloadedChaptersTable.mangaSlug,
+                                name as string,
+                            ),
+                            eq(
+                                DownloadedChaptersTable.chapterSlug,
+                                chapter as string,
+                            ),
+                        ),
+                    },
+                )
+
+                return result || null
+            },
+        })
+
     const { data, isLoading, refetch } = useQuery({
         queryKey: ['manga-chapter', name, chapter],
-        queryFn: () =>
-            getChapterRequest({
+        queryFn: async () => {
+            if (downloadedChapter) {
+                return downloadedChapter.pages
+            }
+            const chapterData = await getChapterRequest({
                 title: name as string,
                 chapter: chapter as string,
-            }),
+            })
+            return chapterData.map((url) => ({ url, localPath: '' }))
+        },
         refetchOnMount: false,
+        enabled: !isDownloadedChapterLoading,
     })
     const { data: mangaDetails } = useQuery({
         queryKey: ['manga-details', name],
@@ -210,29 +248,21 @@ export default function MangaReaderScreen() {
             })
 
             if (existingHistory) {
-                try {
-                    await db
-                        .update(HistoryTable)
-                        .set({
-                            chapterSlug: currentChapterTitle,
-                            readAt: new Date(),
-                        })
-                        .where(eq(HistoryTable.id, existingHistory.id))
-                } catch (error) {
-                    console.log(error)
-                }
-            } else {
-                try {
-                    await db.insert(HistoryTable).values({
-                        mangaSlug: name as string,
-                        mangaTitle: mangaDetails.title,
-                        mangaCover: mangaDetails.cover || '',
+                await db
+                    .update(HistoryTable)
+                    .set({
                         chapterSlug: currentChapterTitle,
                         readAt: new Date(),
                     })
-                } catch (error) {
-                    console.log(error)
-                }
+                    .where(eq(HistoryTable.id, existingHistory.id))
+            } else {
+                await db.insert(HistoryTable).values({
+                    mangaSlug: name as string,
+                    mangaTitle: mangaDetails.title,
+                    mangaCover: mangaDetails.cover || '',
+                    chapterSlug: currentChapterTitle,
+                    readAt: new Date(),
+                })
             }
 
             await queryClient.invalidateQueries({
@@ -241,10 +271,72 @@ export default function MangaReaderScreen() {
         },
     })
 
+    const { mutate: updateReadChapter } = useMutation({
+        mutationFn: async () => {
+            if (!mangaDetails) return
+            const readChapter = await db.query.ReadChaptersTable.findFirst({
+                where: and(
+                    eq(ReadChaptersTable.chapterSlug, currentChapterTitle),
+                    eq(ReadChaptersTable.mangaSlug, name as string),
+                ),
+            })
+
+            if (readChapter) {
+                await db
+                    .update(ReadChaptersTable)
+                    .set({
+                        currentPage:
+                            currentPage === totalChapterPages ||
+                            currentPage === totalChapterPages - 1
+                                ? 0
+                                : currentPage,
+                    })
+                    .where(eq(ReadChaptersTable.id, readChapter.id))
+            } else {
+                await db.insert(ReadChaptersTable).values({
+                    mangaSlug: name as string,
+                    chapterSlug: currentChapterTitle,
+                    currentPage:
+                        currentPage === totalChapterPages ||
+                        currentPage === totalChapterPages - 1
+                            ? 0
+                            : currentPage,
+                })
+            }
+
+            queryClient.setQueryData(['manga-details', name], (old: any) => {
+                if (!old) return null
+                return {
+                    ...old,
+                    chapters: {
+                        ...old.chapters,
+                        chapters: old.chapters.chapters.map((chapter: any) => ({
+                            ...chapter,
+                            isRead:
+                                chapter.slug === currentChapterTitle
+                                    ? true
+                                    : chapter.isRead,
+                            currentPage:
+                                chapter.slug === currentChapterTitle
+                                    ? currentPage
+                                    : chapter.currentPage,
+                        })),
+                    },
+                }
+            })
+
+            await queryClient.invalidateQueries({
+                queryKey: ['read-chapters', name],
+            })
+        },
+    })
+
     const router = useRouter()
 
     useEffect(() => {
-        if (data) {
+        if (data || downloadedChapter) {
+            console.log({ data, downloadedChapter })
+
             setSectionsState((prev) => {
                 if (prev.data.at(0)?.loadedPages.length === 0)
                     return {
@@ -252,7 +344,8 @@ export default function MangaReaderScreen() {
                         data: [
                             {
                                 title: chapter as string,
-                                loadedPages: data,
+                                loadedPages:
+                                    downloadedChapter?.pages || data || [],
                             },
                         ],
                     }
@@ -260,11 +353,16 @@ export default function MangaReaderScreen() {
                 return prev
             })
         }
-    }, [data])
+    }, [data, downloadedChapter])
 
     useEffect(() => {
         updateHistory()
     }, [currentChapterTitle])
+
+    useEffect(() => {
+        if (currentPage < 3) return
+        updateReadChapter()
+    }, [currentPage])
 
     const calculateDimensions = useCallback(
         (originalWidth: number, originalHeight: number) => {
@@ -332,20 +430,22 @@ export default function MangaReaderScreen() {
     }
 
     const renderItem = useCallback(
-        ({ item: page }: { item: string }) => (
-            <MangaPage
-                page={page}
-                width={width}
-                height={height}
-                imageDimensions={imageDimensions}
-                loadingStates={loadingStates}
-                errorStates={errorStates}
-                handleImageLoad={handleImageLoad}
-                handleImageError={handleImageError}
-                retryImageLoad={retryImageLoad}
-                onPress={toggleControls}
-            />
-        ),
+        ({ item: page }: { item: { url: string; localPath: string } }) => {
+            return (
+                <MangaPage
+                    page={page}
+                    width={width}
+                    height={height}
+                    imageDimensions={imageDimensions}
+                    loadingStates={loadingStates}
+                    errorStates={errorStates}
+                    handleImageLoad={handleImageLoad}
+                    handleImageError={handleImageError}
+                    retryImageLoad={retryImageLoad}
+                    onPress={toggleControls}
+                />
+            )
+        },
         [
             width,
             height,
@@ -382,27 +482,58 @@ export default function MangaReaderScreen() {
         )
             return
 
-        const nextChapterData = await getChapterRequest({
-            title: name as string,
-            chapter: nextChapter.slug,
+        // Check if next chapter is downloaded
+        const downloadedNextChapter =
+            await db.query.DownloadedChaptersTable.findFirst({
+                where: and(
+                    eq(DownloadedChaptersTable.mangaSlug, name as string),
+                    eq(DownloadedChaptersTable.chapterSlug, nextChapter.slug),
+                ),
+            })
+
+        let nextChapterData: { url: string; localPath: string }[]
+        if (downloadedNextChapter?.pages) {
+            nextChapterData = downloadedNextChapter.pages
+        } else {
+            const chapterData = await getChapterRequest({
+                title: name as string,
+                chapter: nextChapter.slug,
+            })
+            nextChapterData = chapterData.map((url) => ({ url, localPath: '' }))
+        }
+
+        setSectionsState((prev) => {
+            const newData = [...prev.data]
+            const existingSectionIndex = newData.findIndex(
+                (section) => section.title === nextChapter.slug,
+            )
+
+            if (existingSectionIndex !== -1) {
+                // Update existing section
+                newData[existingSectionIndex] = {
+                    ...newData[existingSectionIndex],
+                    loadedPages: nextChapterData,
+                }
+            } else {
+                // Add new section
+                newData.push({
+                    title: nextChapter.slug,
+                    loadedPages: nextChapterData,
+                })
+            }
+
+            return {
+                ...prev,
+                currentChapter: nextChapter.slug,
+                loadedChapters: Array.from(
+                    new Set([...prev.loadedChapters, nextChapter.slug]),
+                ),
+                data: newData,
+            }
         })
 
-        setSectionsState((prev) => ({
-            ...prev,
-            currentChapter: nextChapter.slug,
-            loadedChapters: Array.from(
-                new Set([...prev.loadedChapters, nextChapter.slug]),
-            ),
-            data: new Set(prev.loadedChapters).has(nextChapter.slug)
-                ? prev.data
-                : [
-                      ...prev.data,
-                      {
-                          title: nextChapter.slug,
-                          loadedPages: nextChapterData,
-                      },
-                  ],
-        }))
+        // Update current chapter title
+        setCurrentChapterTitle(nextChapter.slug)
     }, [
         sectionsState.currentChapter,
         sectionsState.loadedChapters,
@@ -453,7 +584,7 @@ export default function MangaReaderScreen() {
     //     mangaDetails?.chapters?.chapters,
     // ])
 
-    if (isLoading) {
+    if (isLoading || isDownloadedChapterLoading) {
         return (
             <View className='flex-1 items-center justify-center gap-4 bg-[#010001]'>
                 <ActivityIndicator size='large' color='#ffffff' />
@@ -461,7 +592,7 @@ export default function MangaReaderScreen() {
         )
     }
 
-    if (!data) {
+    if (!data && !downloadedChapter) {
         return (
             <View className='flex-1 items-center justify-center gap-6 bg-[#010001] px-4'>
                 <View className='items-center gap-3'>
@@ -520,7 +651,7 @@ export default function MangaReaderScreen() {
                     windowSize={3}
                     removeClippedSubviews={true}
                     renderItem={renderItem}
-                    keyExtractor={(item) => item}
+                    keyExtractor={(item) => item.url}
                     onViewableItemsChanged={({ viewableItems }) => {
                         const chapterTitle = viewableItems.at(0)?.section?.title
                         if (chapterTitle) setCurrentChapterTitle(chapterTitle)
@@ -532,7 +663,8 @@ export default function MangaReaderScreen() {
                                 const pageIndex = sections[
                                     sectionIndex
                                 ].data.findIndex(
-                                    (page) => page === viewableItems[0].item,
+                                    (page) =>
+                                        page.url === viewableItems[0].item.url,
                                 )
                                 setCurrentPage(pageIndex + 1)
                             }

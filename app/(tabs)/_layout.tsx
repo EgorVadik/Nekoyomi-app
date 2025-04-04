@@ -114,7 +114,7 @@ export default function TabsLayout() {
                         },
                         headerTintColor: '#ffffff',
                         headerRight: () => (
-                            <View className='mr-2 flex-row gap-5'>
+                            <View className='mr-4 flex-row gap-5'>
                                 <TouchableOpacity>
                                     <Search size={24} color={'white'} />
                                 </TouchableOpacity>
@@ -173,7 +173,7 @@ export default function TabsLayout() {
                                         )}
                                     </View>
 
-                                    <View className='mr-4 flex-row gap-5'>
+                                    <View className='flex-row gap-5'>
                                         <TouchableOpacity
                                             onPress={() => {
                                                 setIsSearchActive(
@@ -207,6 +207,23 @@ export default function TabsLayout() {
                         name='browse'
                         options={{
                             title: 'Browse',
+                            headerRight: () => (
+                                <View className='mr-4 flex-row gap-5'>
+                                    <TouchableOpacity
+                                        onPress={() => router.push('/search')}
+                                    >
+                                        <Search size={24} color={'white'} />
+                                    </TouchableOpacity>
+
+                                    {/* <TouchableOpacity>
+                                        <ListFilter size={24} color={'white'} />
+                                    </TouchableOpacity>
+    
+                                    <TouchableOpacity>
+                                        <MoreVertical size={24} color={'white'} />
+                                    </TouchableOpacity> */}
+                                </View>
+                            ),
                         }}
                     />
                     <Tabs.Screen

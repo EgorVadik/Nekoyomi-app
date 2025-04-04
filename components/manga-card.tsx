@@ -1,22 +1,41 @@
 import { Manga } from '@/lib/types'
-// import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
-import { Text, TouchableOpacity, View, Image } from 'react-native'
+import { Image, Text, TouchableOpacity, View } from 'react-native'
 
-export const MangaCard = ({ item }: { item: Manga }) => {
+export const MangaCard = ({
+    item,
+    inLibrary = false,
+    unReadChaptersCount = null,
+}: {
+    item: Manga
+    inLibrary?: boolean
+    unReadChaptersCount?: number | null
+}) => {
     return (
         <TouchableOpacity
             className='mb-2 w-1/2 p-1'
             onPress={() => {
-                router.push(`/manga-details/${encodeURIComponent(item.slug)}`)
+                router.push({
+                    pathname: `/manga-details/[name]`,
+                    params: {
+                        name: `${encodeURIComponent(item.slug)}`,
+                        inLibrary: inLibrary ? 'true' : undefined,
+                    },
+                })
             }}
         >
             <View className='relative overflow-hidden rounded-md bg-gray-800'>
+                {unReadChaptersCount && unReadChaptersCount > 0 && (
+                    <View className='absolute left-2 top-2 z-10 flex-row items-center gap-1 rounded bg-[#bfc5db] p-1'>
+                        <Text className='text-xs font-semibold text-black'>
+                            {unReadChaptersCount}
+                        </Text>
+                    </View>
+                )}
                 <Image
                     source={{
                         uri: item.cover,
-                        // uri: 'https://zjcdn.mangahere.org/store/manga/33018/154.0/cosmpressed/c000.jpg',
                         headers: {
                             Referer: 'https://www.mangakakalot.gg/',
                         },

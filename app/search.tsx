@@ -1,13 +1,16 @@
 import { MangaCard } from '@/components/manga-card'
-import { getFilteredMangaListRequest } from '@/lib/api'
-import { filterAtom } from '@/lib/atoms'
+import { searchMangaRequest } from '@/lib/api'
+import { useHeaderHeight } from '@react-navigation/elements'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { useAtomValue } from 'jotai'
+import { useGlobalSearchParams } from 'expo-router'
 import { Box } from 'lucide-react-native'
 import { ActivityIndicator, FlatList, Text, View } from 'react-native'
 
-export default function LatestScreen() {
-    const filters = useAtomValue(filterAtom)
+export default function SearchScreen() {
+    const { searchQuery } = useGlobalSearchParams()
+    const isEnabled =
+        typeof searchQuery === 'string' && searchQuery.trim() !== ''
+    const headerHeight = useHeaderHeight()
     const {
         data,
         isLoading,
@@ -18,16 +21,19 @@ export default function LatestScreen() {
         isRefetching,
     } = useInfiniteQuery({
         initialPageParam: 1,
-        queryKey: ['manga-latest', filters],
+        queryKey: ['search', searchQuery],
         queryFn: ({ pageParam = 1 }) =>
-            getFilteredMangaListRequest({
-                type: 'latest',
+            searchMangaRequest({
+                query: searchQuery as string,
                 page: pageParam,
-                ...filters,
             }),
         getNextPageParam: (lastPage) =>
             lastPage.hasNextPage ? lastPage.nextPage : undefined,
+        enabled: isEnabled,
+        retry: false,
         refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        staleTime: Infinity,
     })
 
     if (isLoading) {
@@ -38,7 +44,11 @@ export default function LatestScreen() {
         )
     }
 
-    if (data == null || data.pages.some((page) => page.data.length === 0)) {
+    if (
+        !isEnabled ||
+        data == null ||
+        data.pages.some((page) => page.data.length === 0)
+    ) {
         return (
             <View className='flex-1 items-center justify-center gap-2 bg-[#121218]'>
                 <Box size={48} color='#ffffff' opacity={0.5} />
@@ -54,7 +64,10 @@ export default function LatestScreen() {
     }
 
     return (
-        <View className='flex-1 bg-[#121218]'>
+        <View
+            className='flex-1 bg-[#121218]'
+            style={{ paddingTop: headerHeight }}
+        >
             <FlatList
                 data={data.pages.flatMap((page) => page.data)}
                 renderItem={({ item }) => <MangaCard item={item} />}
@@ -63,12 +76,12 @@ export default function LatestScreen() {
                 contentContainerStyle={{ padding: 8 }}
                 onRefresh={refetch}
                 refreshing={isRefetching}
-                scrollsToTop={true}
                 onEndReached={() => {
                     if (hasNextPage) {
                         fetchNextPage()
                     }
                 }}
+                scrollsToTop={true}
                 onEndReachedThreshold={1}
                 ListFooterComponent={() =>
                     isFetchingNextPage ? (

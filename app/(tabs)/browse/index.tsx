@@ -56,9 +56,9 @@ export default function PopularScreen() {
     return (
         <View className='flex-1 bg-[#121218]'>
             <FlatList
-                data={data?.pages.flatMap((page) => page.data) ?? []}
+                data={data.pages.flatMap((page) => page.data)}
                 renderItem={({ item }) => <MangaCard item={item} />}
-                keyExtractor={(item) => item.title}
+                keyExtractor={(item, idx) => `${item.slug}-${idx}`}
                 numColumns={2}
                 contentContainerStyle={{ padding: 8 }}
                 onRefresh={refetch}

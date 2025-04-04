@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `unique_chapter` ON `read_chapters` (`manga_slug`,`chapter_slug`);

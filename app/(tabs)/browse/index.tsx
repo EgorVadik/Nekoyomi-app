@@ -8,6 +8,8 @@ import { ActivityIndicator, FlatList, Text, View } from 'react-native'
 
 export default function PopularScreen() {
     const filters = useAtomValue(filterAtom)
+    console.log(filters)
+
     const {
         data,
         isLoading,
@@ -38,7 +40,11 @@ export default function PopularScreen() {
         )
     }
 
-    if (data == null || data.pages.some((page) => page.data.length === 0)) {
+    if (
+        data == null ||
+        data.pages.length === 0 ||
+        data.pages.some((page) => page.data.length === 0)
+    ) {
         return (
             <View className='flex-1 items-center justify-center gap-2 bg-[#121218]'>
                 <Box size={48} color='#ffffff' opacity={0.5} />

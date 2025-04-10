@@ -19,6 +19,7 @@ export default function SearchScreen() {
         isFetchingNextPage,
         refetch,
         isRefetching,
+        error,
     } = useInfiniteQuery({
         initialPageParam: 1,
         queryKey: ['search', searchQuery],
@@ -35,6 +36,8 @@ export default function SearchScreen() {
         refetchOnWindowFocus: false,
         staleTime: Infinity,
     })
+
+    console.log(error)
 
     if (isLoading) {
         return (

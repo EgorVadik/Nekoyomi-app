@@ -1,6 +1,6 @@
 import { ChapterList, NameWithLink } from '@/lib/types'
+import { integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
 import { relations } from 'drizzle-orm'
-import { sqliteTable, text, integer, unique } from 'drizzle-orm/sqlite-core'
 
 export const SavedMangaTable = sqliteTable('saved_manga', {
     id: integer('id', {
@@ -51,9 +51,6 @@ export const ReadChaptersTable = sqliteTable(
         }).primaryKey({
             autoIncrement: true,
         }),
-        // mangaId: integer('manga_id')
-        //     .notNull()
-        //     .references(() => SavedMangaTable.id, { onDelete: 'cascade' }),
         mangaSlug: text('manga_slug').notNull(),
         chapterSlug: text('chapter_slug').notNull(),
         currentPage: integer('current_page').notNull(),
@@ -61,9 +58,7 @@ export const ReadChaptersTable = sqliteTable(
             () => new Date(),
         ),
     },
-    (t) => ({
-        uniqueChapter: unique('unique_chapter').on(t.mangaSlug, t.chapterSlug),
-    }),
+    (t) => [unique('unique_chapter').on(t.mangaSlug, t.chapterSlug)],
 )
 
 export const DownloadedChaptersTable = sqliteTable(
@@ -83,26 +78,49 @@ export const DownloadedChaptersTable = sqliteTable(
             mode: 'timestamp',
         }).$defaultFn(() => new Date()),
     },
-    (t) => ({
-        uniqueChapter: unique('unique_downloaded_chapter').on(
-            t.mangaSlug,
-            t.chapterSlug,
-        ),
-    }),
+    (t) => [unique('unique_downloaded_chapter').on(t.mangaSlug, t.chapterSlug)],
 )
+
+export const DownloadQueueTable = sqliteTable('download_queue', {
+    id: integer('id', {
+        mode: 'number',
+    }).primaryKey({
+        autoIncrement: true,
+    }),
+    mangaSlug: text('manga_slug').notNull(),
+    chapterSlug: text('chapter_slug').notNull(),
+    status: text('status', {
+        enum: ['pending', 'downloading', 'completed', 'failed'],
+    }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(
+        () => new Date(),
+    ),
+})
+
+export const UpdateTable = sqliteTable('update', {
+    id: integer('id', {
+        mode: 'number',
+    }).primaryKey({
+        autoIncrement: true,
+    }),
+    savedMangaId: integer('saved_manga_id')
+        .notNull()
+        .references(() => SavedMangaTable.id),
+    chapterSlug: text('chapter_slug').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(
+        () => new Date(),
+    ),
+})
 
 // Relations
 
-// export const savedMangaRelations = relations(SavedMangaTable, ({ many }) => ({
-//     readChapters: many(ReadChaptersTable),
-// }))
+export const savedMangaRelations = relations(SavedMangaTable, ({ many }) => ({
+    updates: many(UpdateTable),
+}))
 
-// export const readChaptersRelations = relations(
-//     ReadChaptersTable,
-//     ({ one }) => ({
-//         manga: one(SavedMangaTable, {
-//             fields: [ReadChaptersTable.mangaId],
-//             references: [SavedMangaTable.id],
-//         }),
-//     }),
-// )
+export const updateRelations = relations(UpdateTable, ({ one }) => ({
+    savedManga: one(SavedMangaTable, {
+        fields: [UpdateTable.savedMangaId],
+        references: [SavedMangaTable.id],
+    }),
+}))

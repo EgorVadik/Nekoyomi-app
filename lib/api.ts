@@ -4,16 +4,11 @@ import type {
     MangaSchema,
     SearchSchema,
 } from '@/lib/schema'
-import type {
-    ChapterList,
-    Manga,
-    MangaDetails,
-    MangaResponse,
-} from '@/lib/types'
+import type { ChapterList, MangaDetails, MangaResponse } from '@/lib/types'
 import axios from 'axios'
 
 export const api = axios.create({
-    baseURL: 'https://ringtail-literate-sculpin.ngrok-free.app',
+    baseURL: 'https://nekoyomi-server.onrender.com',
 })
 
 export const getChapterRequest = async (

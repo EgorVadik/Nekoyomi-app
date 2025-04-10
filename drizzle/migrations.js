@@ -12,6 +12,7 @@ import m0007 from './0007_cute_kingpin.sql';
 import m0008 from './0008_plain_mister_sinister.sql';
 import m0009 from './0009_nappy_purifiers.sql';
 import m0010 from './0010_cultured_lenny_balinger.sql';
+import m0011 from './0011_curvy_quicksilver.sql';
 
   export default {
     journal,
@@ -26,7 +27,8 @@ m0006,
 m0007,
 m0008,
 m0009,
-m0010
+m0010,
+m0011
     }
   }
   

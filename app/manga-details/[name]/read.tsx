@@ -1,11 +1,10 @@
 import { db } from '@/db'
 import {
+    DownloadedChaptersTable,
     HistoryTable,
     ReadChaptersTable,
-    DownloadedChaptersTable,
 } from '@/db/schema'
 import { getChapterRequest, getMangaDetailsRequest } from '@/lib/api'
-import { extractNumberFromChapterTitle } from '@/lib/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { and, eq } from 'drizzle-orm'
@@ -18,7 +17,7 @@ import {
 } from 'expo-router'
 import capitalize from 'just-capitalize'
 import { AlertCircle, ArrowLeft, RefreshCcw } from 'lucide-react-native'
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     SectionList,
@@ -58,12 +57,32 @@ const MangaPage = memo(
         retryImageLoad: (page: string) => void
         onPress: () => void
     }) => {
+        const imageSource = useMemo(
+            () => ({
+                uri: page.localPath || page.url,
+                headers: {
+                    Referer: 'https://www.mangakakalot.gg/',
+                },
+            }),
+            [page.localPath, page.url],
+        )
+
+        const imageStyle = useMemo(
+            () => [
+                imageDimensions[page.url] || {
+                    width: width,
+                    height: height,
+                },
+            ],
+            [imageDimensions, page.url, width, height],
+        )
+
         return (
             <TouchableOpacity
                 key={page.url}
                 activeOpacity={1}
                 onPress={onPress}
-                className='relative w-full'
+                className='relative w-full items-center'
             >
                 {loadingStates[page.url] && (
                     <View
@@ -92,26 +111,37 @@ const MangaPage = memo(
                     </View>
                 )}
                 <Image
-                    source={{
-                        uri: page.localPath || page.url,
-                        headers: {
-                            Referer: 'https://www.mangakakalot.gg/',
-                        },
-                    }}
+                    source={imageSource}
                     contentFit='contain'
                     onLoad={(e) => handleImageLoad(page.url, e)}
                     onError={() => handleImageError(page.url)}
-                    style={[
-                        imageDimensions[page.url] || {
-                            width: width,
-                            height: height,
-                        },
-                    ]}
+                    style={imageStyle}
+                    recyclingKey={page.url}
                 />
             </TouchableOpacity>
         )
     },
+    (prevProps, nextProps) => {
+        return (
+            prevProps.page.url === nextProps.page.url &&
+            prevProps.page.localPath === nextProps.page.localPath &&
+            prevProps.loadingStates[prevProps.page.url] ===
+                nextProps.loadingStates[nextProps.page.url] &&
+            prevProps.errorStates[prevProps.page.url] ===
+                nextProps.errorStates[nextProps.page.url] &&
+            JSON.stringify(prevProps.imageDimensions[prevProps.page.url]) ===
+                JSON.stringify(nextProps.imageDimensions[nextProps.page.url])
+        )
+    },
 )
+
+const SectionSeparator = memo(({ section }: { section: { title: string } }) => (
+    <View className='px-6 py-10'>
+        <Text className='text-2xl text-white'>
+            {capitalize(section.title).replace('-', ' ').replaceAll('-', '.')}
+        </Text>
+    </View>
+))
 
 export default function MangaReaderScreen() {
     const queryClient = useQueryClient()
@@ -124,9 +154,23 @@ export default function MangaReaderScreen() {
     const [currentChapterTitle, setCurrentChapterTitle] = useState<string>(
         chapter as string,
     )
-    const [isControlsVisible, setIsControlsVisible] = useState(true)
+    const [isLoadingNextChapter, setIsLoadingNextChapter] = useState(false)
+    const [hasFailedToLoadNextChapter, setHasFailedToLoadNextChapter] =
+        useState(false)
+    const [, setIsControlsVisible] = useState(true)
     const headerTranslateY = useSharedValue(0)
     const indicatorTranslateY = useSharedValue(0)
+
+    const imageDimensionsRef = useRef<{
+        [key: string]: { width: number; height: number }
+    }>({})
+    const loadingStatesRef = useRef<{
+        [key: string]: boolean
+    }>({})
+    const errorStatesRef = useRef<{
+        [key: string]: boolean
+    }>({})
+
     const [imageDimensions, setImageDimensions] = useState<{
         [key: string]: { width: number; height: number }
     }>({})
@@ -137,17 +181,22 @@ export default function MangaReaderScreen() {
         [key: string]: boolean
     }>({})
 
+    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
     const toggleControls = useCallback(() => {
-        setIsControlsVisible((prev) => !prev)
-        headerTranslateY.value = withSpring(isControlsVisible ? -100 : 0, {
-            damping: 20,
-            stiffness: 200,
+        setIsControlsVisible((prev) => {
+            const newValue = !prev
+            headerTranslateY.value = withSpring(newValue ? 0 : -100, {
+                damping: 20,
+                stiffness: 200,
+            })
+            indicatorTranslateY.value = withSpring(newValue ? 0 : 100, {
+                damping: 20,
+                stiffness: 200,
+            })
+            return newValue
         })
-        indicatorTranslateY.value = withSpring(isControlsVisible ? 100 : 0, {
-            damping: 20,
-            stiffness: 200,
-        })
-    }, [isControlsVisible, headerTranslateY, indicatorTranslateY])
+    }, [headerTranslateY, indicatorTranslateY])
 
     const headerStyle = useAnimatedStyle(() => {
         return {
@@ -188,8 +237,6 @@ export default function MangaReaderScreen() {
         [sectionsState.data],
     )
 
-    console.log({ sections })
-
     const totalChapterPages = useMemo(() => {
         return sectionsState.data[
             sectionsState.data.findIndex((s) => s.title === currentChapterTitle)
@@ -217,6 +264,7 @@ export default function MangaReaderScreen() {
 
                 return result || null
             },
+            staleTime: 5 * 60 * 1000,
         })
 
     const { data, isLoading, refetch } = useQuery({
@@ -233,12 +281,16 @@ export default function MangaReaderScreen() {
         },
         refetchOnMount: false,
         enabled: !isDownloadedChapterLoading,
+        staleTime: 5 * 60 * 1000,
     })
+
     const { data: mangaDetails } = useQuery({
         queryKey: ['manga-details', name],
         queryFn: () => getMangaDetailsRequest({ title: name as string }),
         refetchOnMount: false,
+        staleTime: 5 * 60 * 1000,
     })
+
     const { mutate: updateHistory } = useMutation({
         mutationFn: async () => {
             if (!mangaDetails) return
@@ -258,7 +310,7 @@ export default function MangaReaderScreen() {
             } else {
                 await db.insert(HistoryTable).values({
                     mangaSlug: name as string,
-                    mangaTitle: mangaDetails.title,
+                    mangaTitle: mangaDetails.title || '',
                     mangaCover: mangaDetails.cover || '',
                     chapterSlug: currentChapterTitle,
                     readAt: new Date(),
@@ -286,9 +338,10 @@ export default function MangaReaderScreen() {
                     .update(ReadChaptersTable)
                     .set({
                         currentPage:
-                            currentPage === totalChapterPages ||
-                            currentPage === totalChapterPages - 1
-                                ? 0
+                            currentPage >= totalChapterPages - 2
+                                ? // currentPage === totalChapterPages ||
+                                  // currentPage === totalChapterPages - 1
+                                  0
                                 : currentPage,
                     })
                     .where(eq(ReadChaptersTable.id, readChapter.id))
@@ -334,9 +387,9 @@ export default function MangaReaderScreen() {
     const router = useRouter()
 
     useEffect(() => {
-        if (data || downloadedChapter) {
-            console.log({ data, downloadedChapter })
+        console.log({ data, downloadedChapter })
 
+        if (data || downloadedChapter) {
             setSectionsState((prev) => {
                 if (prev.data.at(0)?.loadedPages.length === 0)
                     return {
@@ -356,13 +409,38 @@ export default function MangaReaderScreen() {
     }, [data, downloadedChapter])
 
     useEffect(() => {
-        updateHistory()
-    }, [currentChapterTitle])
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current)
+        }
+
+        debounceTimerRef.current = setTimeout(() => {
+            updateHistory()
+        }, 1000)
+
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current)
+            }
+        }
+    }, [currentChapterTitle, updateHistory])
 
     useEffect(() => {
         if (currentPage < 3) return
-        updateReadChapter()
-    }, [currentPage])
+
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current)
+        }
+
+        debounceTimerRef.current = setTimeout(() => {
+            updateReadChapter()
+        }, 1000)
+
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current)
+            }
+        }
+    }, [currentPage, updateReadChapter])
 
     const calculateDimensions = useCallback(
         (originalWidth: number, originalHeight: number) => {
@@ -384,24 +462,35 @@ export default function MangaReaderScreen() {
         [width, height],
     )
 
-    const handleImageLoad = (page: string, e: any) => {
-        const { width: imgWidth, height: imgHeight } = e.source
-        const dimensions = calculateDimensions(imgWidth, imgHeight)
-        setImageDimensions((prev) => ({
-            ...prev,
-            [page]: dimensions,
-        }))
-        setLoadingStates((prev) => ({
-            ...prev,
-            [page]: false,
-        }))
-        setErrorStates((prev) => ({
-            ...prev,
-            [page]: false,
-        }))
-    }
+    const handleImageLoad = useCallback(
+        (page: string, e: any) => {
+            const { width: imgWidth, height: imgHeight } = e.source
+            const dimensions = calculateDimensions(imgWidth, imgHeight)
 
-    const handleImageError = (page: string) => {
+            imageDimensionsRef.current[page] = dimensions
+            loadingStatesRef.current[page] = false
+            errorStatesRef.current[page] = false
+
+            setImageDimensions((prev) => ({
+                ...prev,
+                [page]: dimensions,
+            }))
+            setLoadingStates((prev) => ({
+                ...prev,
+                [page]: false,
+            }))
+            setErrorStates((prev) => ({
+                ...prev,
+                [page]: false,
+            }))
+        },
+        [calculateDimensions],
+    )
+
+    const handleImageError = useCallback((page: string) => {
+        loadingStatesRef.current[page] = false
+        errorStatesRef.current[page] = true
+
         setLoadingStates((prev) => ({
             ...prev,
             [page]: false,
@@ -410,15 +499,18 @@ export default function MangaReaderScreen() {
             ...prev,
             [page]: true,
         }))
-    }
+    }, [])
 
-    const retryImageLoad = async (page: string) => {
+    const retryImageLoad = useCallback(async (page: string) => {
         await fetch(page, {
             headers: {
                 Referer: 'https://www.mangakakalot.gg/',
             },
         })
 
+        loadingStatesRef.current[page] = true
+        errorStatesRef.current[page] = false
+
         setLoadingStates((prev) => ({
             ...prev,
             [page]: true,
@@ -427,7 +519,7 @@ export default function MangaReaderScreen() {
             ...prev,
             [page]: false,
         }))
-    }
+    }, [])
 
     const renderItem = useCallback(
         ({ item: page }: { item: { url: string; localPath: string } }) => {
@@ -460,129 +552,122 @@ export default function MangaReaderScreen() {
     )
 
     const handleEndReached = useCallback(async () => {
-        const currentChapterIdx = sectionsState.data.findIndex(
-            (section) => section.title === sectionsState.currentChapter,
-        )
-
-        if (currentChapterIdx === -1) return
-
-        const nextChapterIdx = mangaDetails?.chapters?.chapters?.findIndex(
-            (page) => page.slug === sectionsState.currentChapter,
-        )
-
-        if (!nextChapterIdx || nextChapterIdx === -1) return
-
-        const nextChapter = mangaDetails?.chapters?.chapters?.at(
-            nextChapterIdx - 1,
-        )
-
-        if (
-            !nextChapter ||
-            new Set(sectionsState.loadedChapters).has(nextChapter.slug)
-        )
-            return
-
-        // Check if next chapter is downloaded
-        const downloadedNextChapter =
-            await db.query.DownloadedChaptersTable.findFirst({
-                where: and(
-                    eq(DownloadedChaptersTable.mangaSlug, name as string),
-                    eq(DownloadedChaptersTable.chapterSlug, nextChapter.slug),
-                ),
-            })
-
-        let nextChapterData: { url: string; localPath: string }[]
-        if (downloadedNextChapter?.pages) {
-            nextChapterData = downloadedNextChapter.pages
-        } else {
-            const chapterData = await getChapterRequest({
-                title: name as string,
-                chapter: nextChapter.slug,
-            })
-            nextChapterData = chapterData.map((url) => ({ url, localPath: '' }))
-        }
-
-        setSectionsState((prev) => {
-            const newData = [...prev.data]
-            const existingSectionIndex = newData.findIndex(
-                (section) => section.title === nextChapter.slug,
+        try {
+            setIsLoadingNextChapter(true)
+            const currentChapterIdx = sectionsState.data.findIndex(
+                (section) => section.title === sectionsState.currentChapter,
             )
 
-            if (existingSectionIndex !== -1) {
-                // Update existing section
-                newData[existingSectionIndex] = {
-                    ...newData[existingSectionIndex],
-                    loadedPages: nextChapterData,
-                }
-            } else {
-                // Add new section
-                newData.push({
-                    title: nextChapter.slug,
-                    loadedPages: nextChapterData,
+            if (currentChapterIdx === -1) return
+
+            const nextChapterIdx = mangaDetails?.chapters?.chapters?.findIndex(
+                (page: any) => page.slug === sectionsState.currentChapter,
+            )
+
+            if (!nextChapterIdx || nextChapterIdx === -1) return
+
+            const nextChapter = mangaDetails?.chapters?.chapters?.at(
+                nextChapterIdx - 1,
+            )
+
+            if (
+                !nextChapter ||
+                new Set(sectionsState.loadedChapters).has(nextChapter.slug)
+            )
+                return
+
+            const downloadedNextChapter =
+                await db.query.DownloadedChaptersTable.findFirst({
+                    where: and(
+                        eq(DownloadedChaptersTable.mangaSlug, name as string),
+                        eq(
+                            DownloadedChaptersTable.chapterSlug,
+                            nextChapter.slug,
+                        ),
+                    ),
                 })
+
+            let nextChapterData: { url: string; localPath: string }[]
+            if (downloadedNextChapter?.pages) {
+                nextChapterData = downloadedNextChapter.pages
+            } else {
+                const chapterData = await getChapterRequest({
+                    title: name as string,
+                    chapter: nextChapter.slug,
+                })
+                nextChapterData = chapterData.map((url) => ({
+                    url,
+                    localPath: '',
+                }))
             }
 
-            return {
-                ...prev,
-                currentChapter: nextChapter.slug,
-                loadedChapters: Array.from(
-                    new Set([...prev.loadedChapters, nextChapter.slug]),
-                ),
-                data: newData,
-            }
-        })
+            setSectionsState((prev) => {
+                const newData = [...prev.data]
+                const existingSectionIndex = newData.findIndex(
+                    (section) => section.title === nextChapter.slug,
+                )
 
-        // Update current chapter title
-        setCurrentChapterTitle(nextChapter.slug)
+                if (existingSectionIndex !== -1) {
+                    newData[existingSectionIndex] = {
+                        ...newData[existingSectionIndex],
+                        loadedPages: nextChapterData,
+                    }
+                } else {
+                    newData.push({
+                        title: nextChapter.slug,
+                        loadedPages: nextChapterData,
+                    })
+                }
+
+                return {
+                    ...prev,
+                    currentChapter: nextChapter.slug,
+                    loadedChapters: Array.from(
+                        new Set([...prev.loadedChapters, nextChapter.slug]),
+                    ),
+                    data: newData,
+                }
+            })
+
+            setCurrentChapterTitle(nextChapter.slug)
+            setHasFailedToLoadNextChapter(false)
+        } catch (error) {
+            setHasFailedToLoadNextChapter(true)
+        } finally {
+            setIsLoadingNextChapter(false)
+        }
     }, [
         sectionsState.currentChapter,
         sectionsState.loadedChapters,
         mangaDetails?.chapters?.chapters,
         name,
+        hasFailedToLoadNextChapter,
+        setHasFailedToLoadNextChapter,
     ])
 
-    // const handleStartReached = useCallback(async () => {
-    //     const currentChapterIdx = sectionsState.data.findIndex(
-    //         (section) => section.title === sectionsState.currentChapter,
-    //     )
+    const handleViewableItemsChanged = useCallback(
+        ({ viewableItems }: { viewableItems: any[] }) => {
+            const chapterTitle = viewableItems.at(0)?.section?.title
+            if (chapterTitle) setCurrentChapterTitle(chapterTitle)
+            if (viewableItems.length > 0) {
+                const sectionIndex = sections.findIndex(
+                    (s) => s.title === chapterTitle,
+                )
+                if (sectionIndex !== -1) {
+                    const pageIndex = sections[sectionIndex].data.findIndex(
+                        (page) => page.url === viewableItems[0].item.url,
+                    )
+                    setCurrentPage(pageIndex + 1)
+                }
+            }
+        },
+        [sections],
+    )
 
-    //     if (currentChapterIdx === -1) return
-
-    //     const prevChapterIdx = mangaDetails?.chapters?.chapters?.findIndex(
-    //         (page) => page.slug === sectionsState.currentChapter,
-    //     )
-
-    //     if (!prevChapterIdx || prevChapterIdx === -1) return
-
-    //     const prevChapter = mangaDetails?.chapters?.chapters?.at(
-    //         prevChapterIdx + 1,
-    //     )
-
-    //     if (
-    //         !prevChapter ||
-    //         new Set(sectionsState.loadedChapters).has(prevChapter.slug)
-    //     )
-    //         return
-
-    //     const prevChapterData = await getChapterRequest({
-    //         title: name as string,
-    //         chapter: prevChapter.slug,
-    //     })
-
-    //     setSectionsState((prev) => ({
-    //         ...prev,
-    //         currentChapter: prevChapter.slug,
-    //         loadedChapters: [...prev.loadedChapters, prevChapter.slug],
-    //         data: [
-    //             { title: prevChapter.slug, loadedPages: prevChapterData },
-    //             ...prev.data,
-    //         ],
-    //     }))
-    // }, [
-    //     sectionsState.currentChapter,
-    //     sectionsState.loadedChapters,
-    //     mangaDetails?.chapters?.chapters,
-    // ])
+    const keyExtractor = useCallback(
+        (item: { url: string; localPath: string }) => item.url,
+        [],
+    )
 
     if (isLoading || isDownloadedChapterLoading) {
         return (
@@ -635,15 +720,7 @@ export default function MangaReaderScreen() {
                 <SectionList
                     sections={sections}
                     showsVerticalScrollIndicator={false}
-                    SectionSeparatorComponent={({ section }) => (
-                        <View className='px-6 py-10'>
-                            <Text className='text-2xl text-white'>
-                                {capitalize(section.title)
-                                    .replace('-', ' ')
-                                    .replaceAll('-', '.')}
-                            </Text>
-                        </View>
-                    )}
+                    SectionSeparatorComponent={SectionSeparator}
                     onEndReachedThreshold={3}
                     onEndReached={handleEndReached}
                     maxToRenderPerBatch={5}
@@ -651,29 +728,36 @@ export default function MangaReaderScreen() {
                     windowSize={3}
                     removeClippedSubviews={true}
                     renderItem={renderItem}
-                    keyExtractor={(item) => item.url}
-                    onViewableItemsChanged={({ viewableItems }) => {
-                        const chapterTitle = viewableItems.at(0)?.section?.title
-                        if (chapterTitle) setCurrentChapterTitle(chapterTitle)
-                        if (viewableItems.length > 0) {
-                            const sectionIndex = sections.findIndex(
-                                (s) => s.title === chapterTitle,
-                            )
-                            if (sectionIndex !== -1) {
-                                const pageIndex = sections[
-                                    sectionIndex
-                                ].data.findIndex(
-                                    (page) =>
-                                        page.url === viewableItems[0].item.url,
-                                )
-                                setCurrentPage(pageIndex + 1)
-                            }
-                        }
-                    }}
+                    keyExtractor={keyExtractor}
+                    onViewableItemsChanged={handleViewableItemsChanged}
                 />
+
+                {isLoadingNextChapter && (
+                    <View className='absolute bottom-24 left-1/2 -translate-x-1/2 flex-row items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>
+                        <ActivityIndicator size='small' color='#ffffff' />
+                        <Text className='ml-2 text-sm font-medium text-white'>
+                            Loading next chapter...
+                        </Text>
+                    </View>
+                )}
+
+                {hasFailedToLoadNextChapter && !isLoadingNextChapter && (
+                    <View className='absolute bottom-24 left-1/2 -translate-x-1/2 flex-col items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>
+                        <View className='flex-row items-center gap-2'>
+                            <AlertCircle size={16} color='#ff6b6b' />
+                            <Text className='text-sm font-medium text-white'>
+                                Failed to load next chapter
+                            </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => handleEndReached()}>
+                            <Text className='text-sm font-medium text-white'>
+                                Retry
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
             </View>
 
-            {/* Page Progress Indicator */}
             <Animated.View
                 style={[indicatorStyle]}
                 className='absolute bottom-8 left-1/2 -translate-x-1/2 flex-row items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'

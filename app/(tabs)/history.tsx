@@ -4,7 +4,7 @@ import { HistoryTable } from '@/db/schema'
 import { extractNumberFromChapterTitle } from '@/lib/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns'
+import { format, differenceInDays } from 'date-fns'
 import { desc, eq } from 'drizzle-orm'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -73,55 +73,50 @@ export default function HistoryScreen() {
 
             const groups: HistoryGroup[] = []
 
-            const todayHistory = history.filter((item) =>
-                isToday(new Date(item.readAt ?? new Date())),
-            )
-            if (todayHistory.length > 0) {
-                groups.push({
-                    title: 'Today',
-                    data: todayHistory,
-                })
-            }
-
-            const yesterdayHistory = history.filter((item) =>
-                isYesterday(new Date(item.readAt ?? new Date())),
-            )
-            if (yesterdayHistory.length > 0) {
-                groups.push({
-                    title: 'Yesterday',
-                    data: yesterdayHistory,
-                })
-            }
-
-            const remainingHistory = history.filter(
-                (item) =>
-                    !isToday(new Date(item.readAt ?? new Date())) &&
-                    !isYesterday(new Date(item.readAt ?? new Date())),
-            )
-
-            const dateGroups = remainingHistory.reduce(
+            // Group by days
+            const historyByDays = history.reduce(
                 (acc, item) => {
-                    const date = formatDistanceToNow(
-                        new Date(item.readAt ?? new Date()),
-                        {
-                            addSuffix: true,
-                        },
-                    )
-                    if (!acc[date]) {
-                        acc[date] = []
+                    const date = new Date(item.readAt ?? new Date())
+                    const daysAgo = differenceInDays(new Date(), date)
+
+                    if (!acc[daysAgo]) {
+                        acc[daysAgo] = []
                     }
-                    acc[date].push(item)
+                    acc[daysAgo].push(item)
                     return acc
                 },
-                {} as Record<string, (typeof HistoryTable.$inferSelect)[]>,
+                {} as Record<number, (typeof HistoryTable.$inferSelect)[]>,
             )
 
-            Object.entries(dateGroups).forEach(([date, items]) => {
-                groups.push({
-                    title: date,
-                    data: items,
+            // Sort by days and create groups
+            Object.entries(historyByDays)
+                .sort(([a], [b]) => Number(a) - Number(b))
+                .forEach(([days, items]) => {
+                    const daysNum = Number(days)
+                    let title = ''
+
+                    if (daysNum === 0) {
+                        title = 'Today'
+                    } else if (daysNum === 1) {
+                        title = 'Yesterday'
+                    } else if (daysNum <= 6) {
+                        title = `${daysNum} days ago`
+                    } else {
+                        title = format(
+                            new Date(items.at(0)?.readAt ?? new Date()),
+                            'MMM d, yyyy',
+                        )
+                    }
+
+                    groups.push({
+                        title,
+                        data: items.sort((a, b) => {
+                            const dateA = new Date(a.readAt ?? new Date())
+                            const dateB = new Date(b.readAt ?? new Date())
+                            return dateB.getTime() - dateA.getTime()
+                        }),
+                    })
                 })
-            })
 
             return {
                 original: groups,
@@ -219,7 +214,11 @@ export default function HistoryScreen() {
         )
     }
 
-    if (!history || history.grouped.some((group) => group.data.length === 0)) {
+    if (
+        !history ||
+        history.grouped.length === 0 ||
+        history.grouped.some((group) => group.data.length === 0)
+    ) {
         return (
             <View className='flex-1 items-center justify-center bg-[#121218]'>
                 <BookOpen size={48} color='#908d94' />

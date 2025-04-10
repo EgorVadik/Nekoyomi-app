@@ -7,7 +7,7 @@ import BottomSheet, {
     BottomSheetView,
 } from '@gorhom/bottom-sheet'
 import { Stack, usePathname, useRouter } from 'expo-router'
-import { useSetAtom } from 'jotai'
+import { useAtom } from 'jotai'
 import { Clock, Heart, ListFilter } from 'lucide-react-native'
 import { useCallback, useRef, useState } from 'react'
 import { Text, TouchableOpacity, View } from 'react-native'
@@ -21,9 +21,9 @@ export default function BrowseLayout() {
     )
     const [status, setStatus] = useState<'All' | 'Ongoing' | 'Completed'>('All')
     const [category, setCategory] = useState<(typeof GENRES)[number]>('All')
-    const setFilters = useSetAtom(filterAtom)
+    const [filters, setFilters] = useAtom(filterAtom)
 
-    const handleSnapPress = useCallback((index: number) => {
+    const handleSnapPress = useCallback(() => {
         bottomSheetRef.current?.expand()
     }, [])
 
@@ -54,23 +54,38 @@ export default function BrowseLayout() {
                     className={cn(
                         'flex-row items-center rounded-xl border border-[#797882] bg-[#1F1F29] px-4 py-2',
                         pathname === '/browse' &&
+                            filters.genre == null &&
                             'border-[#3f4657] bg-[#3f4657]',
                     )}
-                    onPress={() =>
+                    onPress={() => {
+                        setFilters({
+                            filter: undefined,
+                            genre: null,
+                        })
                         pathname === '/browse'
                             ? null
                             : router.replace('/browse')
-                    }
+                    }}
                 >
                     <Heart
                         size={16}
-                        color={pathname === '/browse' ? '#dbe1f7' : '#FFFFFF'}
-                        fill={pathname === '/browse' ? '#dbe1f7' : 'none'}
+                        color={
+                            pathname === '/browse' && filters.genre == null
+                                ? '#dbe1f7'
+                                : '#FFFFFF'
+                        }
+                        fill={
+                            pathname === '/browse' && filters.genre == null
+                                ? '#dbe1f7'
+                                : 'none'
+                        }
                     />
                     <Text
                         className={cn(
                             'ml-2 font-medium text-white',
-                            pathname === '/browse' && 'text-[#dbe1f7]',
+                            pathname === '/browse' &&
+                                filters.genre == null &&
+                                'text-[#dbe1f7]',
                         )}
                     >
                         Popular
@@ -81,18 +96,24 @@ export default function BrowseLayout() {
                     className={cn(
                         'flex-row items-center rounded-xl border border-[#797882] bg-[#1F1F29] px-4 py-2',
                         pathname === '/browse/latest' &&
+                            filters.genre == null &&
                             'border-[#3f4657] bg-[#3f4657]',
                     )}
-                    onPress={() =>
+                    onPress={() => {
+                        setFilters({
+                            filter: undefined,
+                            genre: null,
+                        })
                         pathname === '/browse/latest'
                             ? null
                             : router.replace('/browse/latest')
-                    }
+                    }}
                 >
                     <Clock
                         size={16}
                         color={
-                            pathname === '/browse/latest'
+                            pathname === '/browse/latest' &&
+                            filters.genre == null
                                 ? '#dbe1f7'
                                 : '#FFFFFF'
                         }
@@ -100,7 +121,9 @@ export default function BrowseLayout() {
                     <Text
                         className={cn(
                             'ml-2 font-medium text-white',
-                            pathname === '/browse/latest' && 'text-[#dbe1f7]',
+                            pathname === '/browse/latest' &&
+                                filters.genre == null &&
+                                'text-[#dbe1f7]',
                         )}
                     >
                         Latest
@@ -108,17 +131,17 @@ export default function BrowseLayout() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() => handleSnapPress(0)}
+                    onPress={handleSnapPress}
                     className={cn(
                         'flex-row items-center rounded-xl border border-[#797882] bg-[#1F1F29] px-4 py-2',
-                        pathname === '/browse/filter' &&
+                        (filters.genre != null || filters.filter != null) &&
                             'border-[#3f4657] bg-[#3f4657]',
                     )}
                 >
                     <ListFilter
                         size={16}
                         color={
-                            pathname === '/browse/filter'
+                            filters.genre != null || filters.filter != null
                                 ? '#dbe1f7'
                                 : '#FFFFFF'
                         }
@@ -126,7 +149,8 @@ export default function BrowseLayout() {
                     <Text
                         className={cn(
                             'ml-2 font-medium text-white',
-                            pathname === '/browse/filter' && 'text-[#dbe1f7]',
+                            (filters.genre != null || filters.filter != null) &&
+                                'text-[#dbe1f7]',
                         )}
                     >
                         Filter
@@ -201,7 +225,7 @@ export default function BrowseLayout() {
 
                     <FilterSelect
                         label='Category'
-                        value='All'
+                        value={filters.genre ?? 'All'}
                         options={GENRES as unknown as string[]}
                         onSelect={(value) =>
                             setCategory(value as (typeof GENRES)[number])

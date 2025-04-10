@@ -1,14 +1,23 @@
 import { db } from '@/db'
 import {
+    DownloadedChaptersTable,
+    HistoryTable,
     ReadChaptersTable,
     SavedMangaTable,
-    DownloadedChaptersTable,
+    UpdateTable,
 } from '@/db/schema'
-import { getMangaDetailsRequest, getChapterRequest } from '@/lib/api'
+import { getChapterRequest, getMangaDetailsRequest } from '@/lib/api'
+import { filterAtom } from '@/lib/atoms'
+import { GENRES } from '@/lib/constants'
+import { deleteChapterFiles, downloadImage } from '@/lib/download'
 import type { MangaDetails as MangaDetailsType } from '@/lib/types'
 import { cn, removeAllExtraSpaces } from '@/lib/utils'
+import BottomSheet, {
+    BottomSheetBackdrop,
+    BottomSheetView,
+} from '@gorhom/bottom-sheet'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { eq, and } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
     router,
@@ -16,29 +25,34 @@ import {
     useGlobalSearchParams,
     useLocalSearchParams,
 } from 'expo-router'
+import { useSetAtom } from 'jotai'
 import {
     AlertCircle,
+    ArrowDown,
     ArrowDownCircle,
     ArrowLeft,
+    Check,
     CheckCheck,
+    CheckCheckIcon,
+    CheckCircle2,
     ChevronDown,
     Clock,
     Earth,
     Heart,
     Hourglass,
+    MoreVertical,
+    Play,
     RefreshCcw,
     User2,
-    Download,
-    Bookmark,
-    Check,
-    CheckCheckIcon,
-    ArrowDown,
+    ArrowBigDownIcon,
+    ArrowDownToLineIcon,
 } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     FlatList,
     Image,
+    Platform,
     RefreshControl,
     Animated as RnAnimated,
     ScrollView,
@@ -47,16 +61,20 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated'
-import BottomSheet, {
-    BottomSheetBackdrop,
-    BottomSheetView,
-} from '@gorhom/bottom-sheet'
-import { downloadImage, deleteChapterFiles } from '@/lib/download'
+import Animated, {
+    useAnimatedScrollHandler,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+} from 'react-native-reanimated'
 
-// type MangaDetailsWithReadChapters = MangaDetailsType & {
-//     readChapters?: (typeof ReadChaptersTable.$inferSelect)[]
-// }
+// import { MenuView, MenuComponentRef } from '@react-native-menu/menu'
+import {
+    Menu,
+    MenuOptions,
+    MenuOption,
+    MenuTrigger,
+} from 'react-native-popup-menu'
 
 const getDetailsFromDb = async (slug: string) => {
     const result = await db.query.SavedMangaTable.findFirst({
@@ -73,6 +91,35 @@ export default function MangaDetails() {
     const [selectedChapter, setSelectedChapter] = useState<
         MangaDetailsType['chapters']['chapters'][number] | null
     >(null)
+    const [downloadingChapters, setDownloadingChapters] = useState<string[]>([])
+    const [isUpdating, setIsUpdating] = useState(false)
+    const [synopsisExpanded, setSynopsisExpanded] = useState(false)
+    const scrollY = useSharedValue(0)
+    const setFilters = useSetAtom(filterAtom)
+
+    const scrollHandler = useAnimatedScrollHandler({
+        onScroll: (event) => {
+            scrollY.value = event.contentOffset.y
+        },
+    })
+
+    const animatedBgColor = useAnimatedStyle(() => {
+        return {
+            flex: 1,
+            backgroundColor: withTiming(
+                scrollY.value > 30 ? '#1f212b' : 'transparent',
+                { duration: 100 },
+            ),
+        }
+    })
+
+    const animatedTitleOpacity = useAnimatedStyle(() => {
+        return {
+            opacity: withTiming(scrollY.value > 30 ? 1 : 0, { duration: 200 }),
+        }
+    })
+
+    // const animatedButton
 
     const { data: readChapters } = useQuery({
         queryKey: ['read-chapters', name],
@@ -154,22 +201,19 @@ export default function MangaDetails() {
             return result || []
         },
     })
+    const { data: history } = useQuery({
+        queryKey: ['history', name],
+        queryFn: async () => {
+            const result = await db.query.HistoryTable.findFirst({
+                where: eq(HistoryTable.mangaSlug, name as string),
+            })
 
-    const [hasScrolled, setHasScrolled] = useState(false)
-    const [synopsisExpanded, setSynopsisExpanded] = useState(false)
-    const chevronRotation = useRef(new RnAnimated.Value(0)).current
-    const animatedBgColor = useAnimatedStyle(() => {
-        return {
-            flex: 1,
-            backgroundColor: withTiming(
-                hasScrolled ? '#1f212b' : 'transparent',
-                {
-                    duration: 200,
-                },
-            ),
-        }
+            if (!result) return null
+            return result
+        },
     })
 
+    const chevronRotation = useRef(new RnAnimated.Value(0)).current
     const spin = chevronRotation.interpolate({
         inputRange: [0, 1],
         outputRange: ['0deg', '180deg'],
@@ -186,10 +230,75 @@ export default function MangaDetails() {
 
     const handleRefetch = async () => {
         if (inLibrary === 'true') {
-            const backendData = await getMangaDetailsRequest({
-                title: name as string,
-            })
-            queryClient.setQueryData(['manga-details', name], backendData)
+            if (isUpdating) return
+            try {
+                setIsUpdating(true)
+                const backendData = await getMangaDetailsRequest({
+                    title: name as string,
+                })
+                if (!backendData) return
+
+                if (
+                    backendData.chapters.totalChapters !==
+                    data?.chapters.totalChapters
+                ) {
+                    const savedMangaId = savedManga?.id
+                    if (!savedMangaId) return
+
+                    const newChaptersDifference =
+                        backendData.chapters.chapters.length -
+                        (data?.chapters.chapters.length || 0)
+
+                    const newChapters = backendData.chapters.chapters.slice(
+                        0,
+                        newChaptersDifference,
+                    )
+
+                    await Promise.all([
+                        db
+                            .update(SavedMangaTable)
+                            .set({
+                                chapters: backendData.chapters,
+                            })
+                            .where(eq(SavedMangaTable.slug, name as string)),
+                        db.insert(UpdateTable).values(
+                            newChapters.map((chapter) => ({
+                                savedMangaId,
+                                chapterSlug: chapter.slug,
+                            })),
+                        ),
+                    ])
+
+                    await queryClient.invalidateQueries({
+                        queryKey: ['saved-manga', name],
+                    })
+
+                    await queryClient.invalidateQueries({
+                        queryKey: ['manga-details', name],
+                    })
+
+                    await queryClient.invalidateQueries({
+                        queryKey: ['download-queue'],
+                    })
+
+                    ToastAndroid.show(
+                        `${backendData.chapters.totalChapters - (data?.chapters.totalChapters || 0)} new chapters found`,
+                        ToastAndroid.SHORT,
+                    )
+                } else {
+                    ToastAndroid.show(
+                        'No new chapters found',
+                        ToastAndroid.SHORT,
+                    )
+                }
+            } catch (error) {
+                ToastAndroid.show(
+                    'Failed to update manga details',
+                    ToastAndroid.SHORT,
+                )
+            } finally {
+                setIsUpdating(false)
+            }
         } else {
             refetch()
         }
@@ -352,14 +461,13 @@ export default function MangaDetails() {
     const handleDownloadChapter = useCallback(
         async (chapter: MangaDetailsType['chapters']['chapters'][number]) => {
             try {
+                setDownloadingChapters((prev) => [...prev, chapter.slug])
+
                 const chapterData = await getChapterRequest({
                     title: name as string,
                     chapter: chapter.slug,
                 })
 
-                ToastAndroid.show('Downloading chapter...', ToastAndroid.SHORT)
-
-                // Download all images
                 const pagesWithLocalPaths = await Promise.all(
                     chapterData.map(async (url, index) => {
                         const localPath = await downloadImage(
@@ -390,6 +498,10 @@ export default function MangaDetails() {
                     'Failed to download chapter',
                     ToastAndroid.SHORT,
                 )
+            } finally {
+                setDownloadingChapters((prev) =>
+                    prev.filter((slug) => slug !== chapter.slug),
+                )
             }
         },
         [name],
@@ -398,10 +510,8 @@ export default function MangaDetails() {
     const handleDeleteDownload = useCallback(
         async (chapter: MangaDetailsType['chapters']['chapters'][number]) => {
             try {
-                // Delete local files
                 await deleteChapterFiles(name as string, chapter.slug)
 
-                // Delete from database
                 await db
                     .delete(DownloadedChaptersTable)
                     .where(
@@ -481,11 +591,9 @@ export default function MangaDetails() {
     return (
         <>
             <View className='flex-1 bg-[#121218]'>
-                <ScrollView
+                <Animated.ScrollView
                     className='flex-1'
-                    onScroll={(event) =>
-                        setHasScrolled(event.nativeEvent.contentOffset.y > 30)
-                    }
+                    onScroll={scrollHandler}
                     scrollEventThrottle={16}
                     overScrollMode='always'
                     decelerationRate={'fast'}
@@ -493,10 +601,13 @@ export default function MangaDetails() {
                     scrollsToTop
                     refreshControl={
                         <RefreshControl
-                            refreshing={isRefetching}
+                            refreshing={isRefetching || isUpdating}
                             onRefresh={handleRefetch}
                         />
                     }
+                    contentContainerStyle={{
+                        paddingBottom: 64,
+                    }}
                 >
                     {/* Header Section */}
                     <View className='relative h-72'>
@@ -604,7 +715,7 @@ export default function MangaDetails() {
                                     }
                                 }
 
-                                queryClient.invalidateQueries({
+                                await queryClient.invalidateQueries({
                                     queryKey: ['saved-manga'],
                                     refetchType: 'all',
                                 })
@@ -689,6 +800,13 @@ export default function MangaDetails() {
                             <TouchableOpacity
                                 key={genre.name}
                                 className='rounded-lg border border-[#7e7d87] px-4 py-2'
+                                onPress={() => {
+                                    setFilters({
+                                        filter: 'latest-all',
+                                        genre: genre.name as (typeof GENRES)[number],
+                                    })
+                                    router.push('/browse')
+                                }}
                             >
                                 <Text className='font-medium text-[#c4c4ce]'>
                                     {genre.name}
@@ -769,33 +887,60 @@ export default function MangaDetails() {
                                             }}
                                             className='p-2'
                                         >
-                                            <ArrowDownCircle
-                                                color={
-                                                    downloadedChapters?.some(
-                                                        (downloaded) =>
-                                                            downloaded.chapterSlug ===
-                                                            chapter.slug,
-                                                    )
-                                                        ? '#a9c8fc'
-                                                        : '#8e8d96'
-                                                }
-                                                fill={
-                                                    downloadedChapters?.some(
-                                                        (downloaded) =>
-                                                            downloaded.chapterSlug ===
-                                                            chapter.slug,
-                                                    )
-                                                        ? '#a9c8fc'
-                                                        : 'none'
-                                                }
-                                            />
+                                            {downloadingChapters.includes(
+                                                chapter.slug,
+                                            ) ? (
+                                                <View className='items-center justify-center'>
+                                                    <ActivityIndicator
+                                                        size='small'
+                                                        color='#a9c8fc'
+                                                    />
+                                                </View>
+                                            ) : !downloadedChapters?.some(
+                                                  (downloaded) =>
+                                                      downloaded.chapterSlug ===
+                                                      chapter.slug,
+                                              ) ? (
+                                                <ArrowDownCircle
+                                                    color={'#8e8d96'}
+                                                />
+                                            ) : (
+                                                <CheckCircle2
+                                                    color={'#121218'}
+                                                    fill={'#fff'}
+                                                    strokeWidth={2}
+                                                />
+                                            )}
                                         </TouchableOpacity>
                                     </TouchableOpacity>
                                 )
                             }}
                         />
                     </View>
-                </ScrollView>
+                </Animated.ScrollView>
+
+                <TouchableOpacity
+                    className='absolute bottom-4 right-4 z-10 flex-row items-center justify-center gap-4 rounded-2xl bg-[#1e4976] p-4'
+                    onPress={() => {
+                        if (history != null) {
+                            router.push(
+                                `/manga-details/${name}/read?chapter=${encodeURIComponent(history.chapterSlug)}`,
+                            )
+                        } else {
+                            const firstChapter =
+                                data.chapters.chapters.at(0)?.slug
+                            if (!firstChapter) return
+                            router.push(
+                                `/manga-details/${name}/read?chapter=${encodeURIComponent(firstChapter)}`,
+                            )
+                        }
+                    }}
+                >
+                    <Play size={16} color={'#fff'} fill={'#fff'} />
+                    <Text className='text-sm font-medium text-white'>
+                        {history != null ? 'Resume' : 'Start'}
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             <BottomSheet
@@ -854,7 +999,6 @@ export default function MangaDetails() {
 
             <Stack.Screen
                 options={{
-                    headerTitle: '',
                     headerTransparent: true,
                     headerBackground() {
                         return (
@@ -864,6 +1008,50 @@ export default function MangaDetails() {
                             />
                         )
                     },
+                    headerTitle: () => (
+                        <Animated.Text
+                            style={[
+                                {
+                                    color: 'white',
+                                    fontSize: 18,
+                                    fontWeight: '600',
+                                },
+                                animatedTitleOpacity,
+                            ]}
+                        >
+                            {data.title}
+                        </Animated.Text>
+                    ),
+                    headerRight: () => (
+                        <View>
+                            <Menu>
+                                <MenuTrigger>
+                                    <ArrowDownToLineIcon
+                                        size={24}
+                                        color={'#fff'}
+                                    />
+                                </MenuTrigger>
+                                <MenuOptions>
+                                    <MenuOption
+                                        onSelect={() => alert(`Save`)}
+                                        text='Save'
+                                    />
+                                    <MenuOption
+                                        onSelect={() => alert(`Delete`)}
+                                    >
+                                        <Text style={{ color: 'red' }}>
+                                            Delete
+                                        </Text>
+                                    </MenuOption>
+                                    <MenuOption
+                                        onSelect={() => alert(`Not called`)}
+                                        disabled={true}
+                                        text='Disabled'
+                                    />
+                                </MenuOptions>
+                            </Menu>
+                        </View>
+                    ),
                 }}
             />
         </>

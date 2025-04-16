@@ -16,12 +16,18 @@ import {
     useRouter,
 } from 'expo-router'
 import capitalize from 'just-capitalize'
-import { AlertCircle, ArrowLeft, RefreshCcw } from 'lucide-react-native'
+import {
+    AlertCircle,
+    ArrowLeft,
+    ArrowRight,
+    RefreshCcw,
+} from 'lucide-react-native'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     SectionList,
     Text,
+    ToastAndroid,
     TouchableOpacity,
     View,
     useWindowDimensions,
@@ -117,6 +123,7 @@ const MangaPage = memo(
                     onError={() => handleImageError(page.url)}
                     style={imageStyle}
                     recyclingKey={page.url}
+                    cachePolicy={'memory'}
                 />
             </TouchableOpacity>
         )
@@ -381,14 +388,15 @@ export default function MangaReaderScreen() {
             await queryClient.invalidateQueries({
                 queryKey: ['read-chapters', name],
             })
+            await queryClient.invalidateQueries({
+                queryKey: ['saved-manga'],
+            })
         },
     })
 
     const router = useRouter()
 
     useEffect(() => {
-        console.log({ data, downloadedChapter })
-
         if (data || downloadedChapter) {
             setSectionsState((prev) => {
                 if (prev.data.at(0)?.loadedPages.length === 0)
@@ -669,6 +677,26 @@ export default function MangaReaderScreen() {
         [],
     )
 
+    const hasNextChapter = useMemo(() => {
+        const nextChapterIdx = mangaDetails?.chapters?.chapters?.findIndex(
+            (chapter) => chapter.slug === currentChapterTitle,
+        )
+
+        return nextChapterIdx !== -1 && nextChapterIdx !== 0
+    }, [mangaDetails?.chapters?.chapters, currentChapterTitle])
+
+    const hasPreviousChapter = useMemo(() => {
+        const previousChapterIdx = mangaDetails?.chapters?.chapters?.findIndex(
+            (chapter) => chapter.slug === currentChapterTitle,
+        )
+
+        return (
+            previousChapterIdx !== -1 &&
+            previousChapterIdx !==
+                (mangaDetails?.chapters?.chapters?.length || 0) - 1
+        )
+    }, [mangaDetails?.chapters?.chapters, currentChapterTitle])
+
     if (isLoading || isDownloadedChapterLoading) {
         return (
             <View className='flex-1 items-center justify-center gap-4 bg-[#010001]'>
@@ -760,21 +788,112 @@ export default function MangaReaderScreen() {
 
             <Animated.View
                 style={[indicatorStyle]}
-                className='absolute bottom-8 left-1/2 -translate-x-1/2 flex-row items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'
+                className='absolute bottom-8 right-4 flex-row items-center justify-center gap-4'
             >
-                <View className='flex-row items-center gap-2'>
-                    <View className='h-1 w-20 rounded-full bg-[#2d2f3a]'>
-                        <View
-                            className='h-full rounded-full bg-white'
-                            style={{
-                                width: `${(currentPage / (totalChapterPages || 1)) * 100}%`,
-                            }}
-                        />
+                {hasPreviousChapter && (
+                    <TouchableOpacity
+                        disabled={!hasPreviousChapter}
+                        onPress={() => {
+                            if (!hasPreviousChapter)
+                                return ToastAndroid.show(
+                                    'No previous chapter',
+                                    ToastAndroid.SHORT,
+                                )
+
+                            const previousChapterIdx =
+                                mangaDetails?.chapters?.chapters?.findIndex(
+                                    (chapter) =>
+                                        chapter.slug === currentChapterTitle,
+                                )
+
+                            if (
+                                previousChapterIdx == null ||
+                                previousChapterIdx === -1
+                            )
+                                return ToastAndroid.show(
+                                    'Failed to load previous chapter',
+                                    ToastAndroid.SHORT,
+                                )
+
+                            const previousChapter =
+                                mangaDetails?.chapters?.chapters?.at(
+                                    previousChapterIdx + 1,
+                                )
+
+                            if (!previousChapter)
+                                return ToastAndroid.show(
+                                    'Failed to load previous chapter',
+                                    ToastAndroid.SHORT,
+                                )
+
+                            router.replace(
+                                `/manga-details/${name}/read?chapter=${encodeURIComponent(previousChapter.slug)}`,
+                            )
+                        }}
+                        className='rounded-full bg-[#1c1e25]/80 p-2 shadow-lg'
+                    >
+                        <ArrowLeft size={24} color='#fff' />
+                    </TouchableOpacity>
+                )}
+
+                <View className='rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>
+                    <View className='flex-row items-center gap-2'>
+                        <View className='h-1 w-20 rounded-full bg-[#2d2f3a]'>
+                            <View
+                                className='h-full rounded-full bg-white'
+                                style={{
+                                    width: `${(currentPage / (totalChapterPages || 1)) * 100}%`,
+                                }}
+                            />
+                        </View>
+                        <Text className='text-sm font-medium text-white'>
+                            {currentPage} / {totalChapterPages || 1}
+                        </Text>
                     </View>
-                    <Text className='text-sm font-medium text-white'>
-                        {currentPage} / {totalChapterPages || 1}
-                    </Text>
                 </View>
+
+                {hasNextChapter && (
+                    <TouchableOpacity
+                        disabled={!hasNextChapter}
+                        onPress={() => {
+                            if (!hasNextChapter)
+                                return ToastAndroid.show(
+                                    'No next chapter',
+                                    ToastAndroid.SHORT,
+                                )
+
+                            const nextChapterIdx =
+                                mangaDetails?.chapters?.chapters?.findIndex(
+                                    (chapter) =>
+                                        chapter.slug === currentChapterTitle,
+                                )
+
+                            if (nextChapterIdx == null || nextChapterIdx === -1)
+                                return ToastAndroid.show(
+                                    'Failed to load next chapter',
+                                    ToastAndroid.SHORT,
+                                )
+
+                            const nextChapter =
+                                mangaDetails?.chapters?.chapters?.at(
+                                    nextChapterIdx - 1,
+                                )
+
+                            if (!nextChapter)
+                                return ToastAndroid.show(
+                                    'Failed to load next chapter',
+                                    ToastAndroid.SHORT,
+                                )
+
+                            router.replace(
+                                `/manga-details/${name}/read?chapter=${encodeURIComponent(nextChapter.slug)}`,
+                            )
+                        }}
+                        className='rounded-full bg-[#1c1e25]/80 p-2 shadow-lg'
+                    >
+                        <ArrowRight size={24} color='#fff' />
+                    </TouchableOpacity>
+                )}
             </Animated.View>
             <Stack.Screen
                 options={{

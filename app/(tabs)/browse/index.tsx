@@ -8,7 +8,6 @@ import { ActivityIndicator, FlatList, Text, View } from 'react-native'
 
 export default function PopularScreen() {
     const filters = useAtomValue(filterAtom)
-    console.log(filters)
 
     const {
         data,

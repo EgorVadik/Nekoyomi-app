@@ -1,6 +1,6 @@
 import { MangaCard } from '@/components/manga-card'
 import { db } from '@/db'
-import { ReadChaptersTable, SavedMangaTable } from '@/db/schema'
+import { HistoryTable, ReadChaptersTable, SavedMangaTable } from '@/db/schema'
 import { useQuery } from '@tanstack/react-query'
 import { inArray } from 'drizzle-orm'
 import { router } from 'expo-router'
@@ -20,24 +20,45 @@ export default function LibraryScreen() {
         queryKey: ['saved-manga'],
         queryFn: async () => {
             const savedManga = await db.select().from(SavedMangaTable)
-            const readChapters = await db
-                .select()
-                .from(ReadChaptersTable)
-                .where(
-                    inArray(
-                        ReadChaptersTable.mangaSlug,
-                        savedManga.map((manga) => manga.slug),
+
+            const [readChapters, history] = await Promise.all([
+                db
+                    .select()
+                    .from(ReadChaptersTable)
+                    .where(
+                        inArray(
+                            ReadChaptersTable.mangaSlug,
+                            savedManga.map((manga) => manga.slug),
+                        ),
                     ),
-                )
-            return savedManga.map((manga) => ({
+                db
+                    .select()
+                    .from(HistoryTable)
+                    .where(
+                        inArray(
+                            HistoryTable.mangaSlug,
+                            savedManga.map((manga) => manga.slug),
+                        ),
+                    ),
+            ])
+
+            const mangaWithUnreadCount = savedManga.map((manga) => ({
                 ...manga,
+                lastRead:
+                    history.find((h) => h.mangaSlug === manga.slug)?.readAt ||
+                    new Date(0),
                 unReadChaptersCount:
                     (manga.chapters?.totalChapters ?? 0) -
                     readChapters.filter(
                         (chapter) => chapter.mangaSlug === manga.slug,
                     ).length,
             }))
+
+            return mangaWithUnreadCount.sort(
+                (a, b) => b.lastRead.getTime() - a.lastRead.getTime(),
+            )
         },
+        refetchOnMount: 'always',
     })
 
     if (isLoading) {

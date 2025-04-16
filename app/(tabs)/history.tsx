@@ -4,7 +4,7 @@ import { HistoryTable } from '@/db/schema'
 import { extractNumberFromChapterTitle } from '@/lib/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { format, differenceInDays } from 'date-fns'
+import { differenceInDays, format } from 'date-fns'
 import { desc, eq } from 'drizzle-orm'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -12,7 +12,7 @@ import { AlertCircle, BookOpen, Trash2 } from 'lucide-react-native'
 import { useCallback, useState } from 'react'
 import {
     ActivityIndicator,
-    FlatList,
+    SectionList,
     Text,
     ToastAndroid,
     TouchableOpacity,
@@ -73,7 +73,6 @@ export default function HistoryScreen() {
 
             const groups: HistoryGroup[] = []
 
-            // Group by days
             const historyByDays = history.reduce(
                 (acc, item) => {
                     const date = new Date(item.readAt ?? new Date())
@@ -88,7 +87,6 @@ export default function HistoryScreen() {
                 {} as Record<number, (typeof HistoryTable.$inferSelect)[]>,
             )
 
-            // Sort by days and create groups
             Object.entries(historyByDays)
                 .sort(([a], [b]) => Number(a) - Number(b))
                 .forEach(([days, items]) => {
@@ -240,9 +238,12 @@ export default function HistoryScreen() {
             className='flex-1 bg-[#121218]'
             style={{ paddingTop: headerHeight }}
         >
-            <FlatList
-                data={history.grouped.flatMap((group) => group.data)}
+            <SectionList
+                sections={history.grouped}
                 renderItem={renderItem}
+                renderSectionHeader={({ section }) =>
+                    renderSectionHeader({ title: section.title })
+                }
                 keyExtractor={(item) => item.id.toString()}
                 maxToRenderPerBatch={20}
                 initialNumToRender={20}
@@ -251,20 +252,6 @@ export default function HistoryScreen() {
                     offset: 100 * index,
                     index,
                 })}
-                ListHeaderComponent={() => (
-                    <>
-                        {history?.grouped.map(
-                            (group) =>
-                                group.data.length > 0 && (
-                                    <View key={group.title}>
-                                        {renderSectionHeader({
-                                            title: group.title,
-                                        })}
-                                    </View>
-                                ),
-                        )}
-                    </>
-                )}
             />
             <CustomModal
                 visible={deleteModalVisible}

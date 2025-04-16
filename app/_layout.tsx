@@ -1,5 +1,6 @@
 import { db } from '@/db'
 import migrations from '@/drizzle/migrations'
+import { PortalHost } from '@rn-primitives/portal'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator'
 import { router, Stack } from 'expo-router'
@@ -10,7 +11,6 @@ import { Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import './global.css'
-import { MenuProvider } from 'react-native-popup-menu'
 
 const queryClient = new QueryClient()
 
@@ -33,9 +33,9 @@ export default function RootLayout() {
     }, [success, error])
 
     return (
-        <GestureHandlerRootView>
-            <QueryClientProvider client={queryClient}>
-                <MenuProvider>
+        <>
+            <GestureHandlerRootView>
+                <QueryClientProvider client={queryClient}>
                     <Stack
                         screenOptions={{
                             headerShown: false,
@@ -111,8 +111,9 @@ export default function RootLayout() {
                             }}
                         />
                     </Stack>
-                </MenuProvider>
-            </QueryClientProvider>
-        </GestureHandlerRootView>
+                </QueryClientProvider>
+            </GestureHandlerRootView>
+            <PortalHost />
+        </>
     )
 }

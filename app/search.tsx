@@ -37,8 +37,6 @@ export default function SearchScreen() {
         staleTime: Infinity,
     })
 
-    console.log(error)
-
     if (isLoading) {
         return (
             <View className='flex-1 items-center justify-center bg-[#121218]'>

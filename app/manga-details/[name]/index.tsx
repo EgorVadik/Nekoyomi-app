@@ -1,3 +1,10 @@
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { db } from '@/db'
 import {
     DownloadedChaptersTable,
@@ -11,7 +18,11 @@ import { filterAtom } from '@/lib/atoms'
 import { GENRES } from '@/lib/constants'
 import { deleteChapterFiles, downloadImage } from '@/lib/download'
 import type { MangaDetails as MangaDetailsType } from '@/lib/types'
-import { cn, removeAllExtraSpaces } from '@/lib/utils'
+import {
+    cn,
+    extractNumberFromChapterTitle,
+    removeAllExtraSpaces,
+} from '@/lib/utils'
 import BottomSheet, {
     BottomSheetBackdrop,
     BottomSheetView,
@@ -30,6 +41,7 @@ import {
     AlertCircle,
     ArrowDown,
     ArrowDownCircle,
+    ArrowDownToLineIcon,
     ArrowLeft,
     Check,
     CheckCheck,
@@ -40,14 +52,11 @@ import {
     Earth,
     Heart,
     Hourglass,
-    MoreVertical,
     Play,
     RefreshCcw,
     User2,
-    ArrowBigDownIcon,
-    ArrowDownToLineIcon,
 } from 'lucide-react-native'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     FlatList,
@@ -67,14 +76,7 @@ import Animated, {
     useSharedValue,
     withTiming,
 } from 'react-native-reanimated'
-
-// import { MenuView, MenuComponentRef } from '@react-native-menu/menu'
-import {
-    Menu,
-    MenuOptions,
-    MenuOption,
-    MenuTrigger,
-} from 'react-native-popup-menu'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const getDetailsFromDb = async (slug: string) => {
     const result = await db.query.SavedMangaTable.findFirst({
@@ -96,6 +98,7 @@ export default function MangaDetails() {
     const [synopsisExpanded, setSynopsisExpanded] = useState(false)
     const scrollY = useSharedValue(0)
     const setFilters = useSetAtom(filterAtom)
+    const insets = useSafeAreaInsets()
 
     const scrollHandler = useAnimatedScrollHandler({
         onScroll: (event) => {
@@ -118,8 +121,6 @@ export default function MangaDetails() {
             opacity: withTiming(scrollY.value > 30 ? 1 : 0, { duration: 200 }),
         }
     })
-
-    // const animatedButton
 
     const { data: readChapters } = useQuery({
         queryKey: ['read-chapters', name],
@@ -219,6 +220,12 @@ export default function MangaDetails() {
         outputRange: ['0deg', '180deg'],
     })
 
+    const isRead = useMemo(() => {
+        return readChapters?.some(
+            (readChapter) => readChapter.chapterSlug === selectedChapter?.slug,
+        )
+    }, [readChapters, selectedChapter])
+
     useEffect(() => {
         RnAnimated.spring(chevronRotation, {
             friction: 8,
@@ -279,6 +286,10 @@ export default function MangaDetails() {
 
                     await queryClient.invalidateQueries({
                         queryKey: ['download-queue'],
+                    })
+
+                    await queryClient.invalidateQueries({
+                        queryKey: ['saved-manga'],
                     })
 
                     ToastAndroid.show(
@@ -452,6 +463,9 @@ export default function MangaDetails() {
             await queryClient.invalidateQueries({
                 queryKey: ['read-chapters', name],
             })
+            await queryClient.invalidateQueries({
+                queryKey: ['saved-manga'],
+            })
 
             bottomSheetRef.current?.close()
         },
@@ -460,9 +474,12 @@ export default function MangaDetails() {
 
     const handleDownloadChapter = useCallback(
         async (chapter: MangaDetailsType['chapters']['chapters'][number]) => {
-            try {
-                setDownloadingChapters((prev) => [...prev, chapter.slug])
+            setDownloadingChapters((prev) => [...prev, chapter.slug])
 
+            const isDownloading = downloadingChapters.includes(chapter.slug)
+            if (isDownloading) return
+
+            try {
                 const chapterData = await getChapterRequest({
                     title: name as string,
                     chapter: chapter.slug,
@@ -504,7 +521,7 @@ export default function MangaDetails() {
                 )
             }
         },
-        [name],
+        [name, downloadingChapters],
     )
 
     const handleDeleteDownload = useCallback(
@@ -541,6 +558,74 @@ export default function MangaDetails() {
             }
         },
         [name],
+    )
+
+    const handleDownloadMultipleChapters = useCallback(
+        async (count: number, type: 'next' | 'unread' = 'next') => {
+            if (!data) return
+            const lastDownloadedChapter = downloadedChapters
+                ?.sort(
+                    (a, b) =>
+                        (extractNumberFromChapterTitle(
+                            a.chapterSlug.replaceAll('-', '.'),
+                        ) ?? 0) -
+                        (extractNumberFromChapterTitle(
+                            b.chapterSlug.replaceAll('-', '.'),
+                        ) ?? 0),
+                )
+                ?.at(-1)
+
+            if (!lastDownloadedChapter) {
+                const chapters =
+                    type === 'unread'
+                        ? data.chapters.chapters.filter(
+                              (chapter) =>
+                                  !readChapters?.some(
+                                      (readChapter) =>
+                                          readChapter.chapterSlug ===
+                                          chapter.slug,
+                                  ),
+                          )
+                        : data.chapters.chapters.slice(-count)
+                await Promise.all(chapters.map(handleDownloadChapter))
+                return
+            }
+
+            const nextChapterIdx = data.chapters.chapters.findIndex(
+                (chapter) => chapter.slug === lastDownloadedChapter.chapterSlug,
+            )
+            if (nextChapterIdx === -1)
+                return ToastAndroid.show(
+                    'No more chapters to download',
+                    ToastAndroid.SHORT,
+                )
+
+            const chaptersToDownload =
+                type === 'unread'
+                    ? data.chapters.chapters.filter(
+                          (chapter) =>
+                              !downloadedChapters?.some(
+                                  (downloaded) =>
+                                      downloaded.chapterSlug === chapter.slug,
+                              ) &&
+                              !readChapters?.some(
+                                  (readChapter) =>
+                                      readChapter.chapterSlug === chapter.slug,
+                              ),
+                      )
+                    : data.chapters.chapters.slice(
+                          nextChapterIdx - count,
+                          nextChapterIdx,
+                      )
+            if (!chaptersToDownload)
+                return ToastAndroid.show(
+                    'No more chapters to download',
+                    ToastAndroid.SHORT,
+                )
+
+            await Promise.all(chaptersToDownload.map(handleDownloadChapter))
+        },
+        [downloadingChapters, data, handleDownloadChapter],
     )
 
     if (isLoading) {
@@ -920,7 +1005,7 @@ export default function MangaDetails() {
                 </Animated.ScrollView>
 
                 <TouchableOpacity
-                    className='absolute bottom-4 right-4 z-10 flex-row items-center justify-center gap-4 rounded-2xl bg-[#1e4976] p-4'
+                    className='absolute bottom-4 right-4 flex-row items-center justify-center gap-4 rounded-2xl bg-[#1e4976] p-4'
                     onPress={() => {
                         if (history != null) {
                             router.push(
@@ -928,7 +1013,7 @@ export default function MangaDetails() {
                             )
                         } else {
                             const firstChapter =
-                                data.chapters.chapters.at(0)?.slug
+                                data.chapters.chapters.at(-1)?.slug
                             if (!firstChapter) return
                             router.push(
                                 `/manga-details/${name}/read?chapter=${encodeURIComponent(firstChapter)}`,
@@ -970,7 +1055,7 @@ export default function MangaDetails() {
                         >
                             <CheckCheckIcon size={24} color='#908d94' />
                             <Text className='mt-1 text-sm font-medium text-[#908d94]'>
-                                Mark as Read
+                                {isRead ? 'Mark as Unread' : 'Mark as Read'}
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -1023,34 +1108,156 @@ export default function MangaDetails() {
                         </Animated.Text>
                     ),
                     headerRight: () => (
-                        <View>
-                            <Menu>
-                                <MenuTrigger>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <TouchableOpacity hitSlop={15}>
                                     <ArrowDownToLineIcon
                                         size={24}
                                         color={'#fff'}
                                     />
-                                </MenuTrigger>
-                                <MenuOptions>
-                                    <MenuOption
-                                        onSelect={() => alert(`Save`)}
-                                        text='Save'
-                                    />
-                                    <MenuOption
-                                        onSelect={() => alert(`Delete`)}
+                                </TouchableOpacity>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align='end'
+                                className='w-56 rounded border-0 bg-[#1a1c23] shadow-none'
+                                style={{
+                                    position:
+                                        Platform.OS !== 'web'
+                                            ? 'absolute'
+                                            : undefined,
+                                    top:
+                                        Platform.OS !== 'web'
+                                            ? insets.top + 45
+                                            : undefined,
+                                }}
+                            >
+                                <DropdownMenuGroup>
+                                    <DropdownMenuItem
+                                        className='native:py-4'
+                                        asChild
                                     >
-                                        <Text style={{ color: 'red' }}>
-                                            Delete
-                                        </Text>
-                                    </MenuOption>
-                                    <MenuOption
-                                        onSelect={() => alert(`Not called`)}
-                                        disabled={true}
-                                        text='Disabled'
-                                    />
-                                </MenuOptions>
-                            </Menu>
-                        </View>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                const lastDownloadedChapter =
+                                                    downloadedChapters?.at(-1)
+                                                if (!lastDownloadedChapter) {
+                                                    const firstChapter =
+                                                        data.chapters.chapters.at(
+                                                            -1,
+                                                        )
+                                                    if (!firstChapter)
+                                                        return ToastAndroid.show(
+                                                            'Failed to download first chapter',
+                                                            ToastAndroid.SHORT,
+                                                        )
+
+                                                    handleDownloadChapter(
+                                                        firstChapter,
+                                                    )
+                                                } else {
+                                                    const nextChapterIdx =
+                                                        data.chapters.chapters.findIndex(
+                                                            (chapter) =>
+                                                                chapter.slug ===
+                                                                lastDownloadedChapter.chapterSlug,
+                                                        )
+                                                    if (
+                                                        nextChapterIdx === -1 ||
+                                                        nextChapterIdx === 0
+                                                    )
+                                                        return ToastAndroid.show(
+                                                            'No more chapters to download',
+                                                            ToastAndroid.SHORT,
+                                                        )
+                                                    const nextChapter =
+                                                        data.chapters.chapters.at(
+                                                            nextChapterIdx - 1,
+                                                        )
+                                                    if (!nextChapter)
+                                                        return ToastAndroid.show(
+                                                            'No more chapters to download',
+                                                            ToastAndroid.SHORT,
+                                                        )
+
+                                                    handleDownloadChapter(
+                                                        nextChapter,
+                                                    )
+                                                }
+                                            }}
+                                        >
+                                            <Text className='font-semibold text-white'>
+                                                Next Chapter
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className='native:py-4'
+                                        asChild
+                                    >
+                                        <TouchableOpacity
+                                            onPress={() =>
+                                                handleDownloadMultipleChapters(
+                                                    5,
+                                                )
+                                            }
+                                        >
+                                            <Text className='font-semibold text-white'>
+                                                Next 5 Chapters
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className='native:py-4'
+                                        asChild
+                                    >
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                handleDownloadMultipleChapters(
+                                                    10,
+                                                )
+                                            }}
+                                        >
+                                            <Text className='font-semibold text-white'>
+                                                Next 10 Chapters
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className='native:py-4'
+                                        asChild
+                                    >
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                handleDownloadMultipleChapters(
+                                                    25,
+                                                )
+                                            }}
+                                        >
+                                            <Text className='font-semibold text-white'>
+                                                Next 25 Chapters
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className='native:py-4'
+                                        asChild
+                                    >
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                handleDownloadMultipleChapters(
+                                                    0,
+                                                    'unread',
+                                                )
+                                            }}
+                                        >
+                                            <Text className='font-semibold text-white'>
+                                                Unread
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </DropdownMenuItem>
+                                </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     ),
                 }}
             />

@@ -22,7 +22,6 @@ export const downloadImage = async (
 
         return uri
     } catch (error) {
-        console.error('Error downloading image:', error)
         throw error
     }
 }
@@ -35,7 +34,6 @@ export const deleteChapterFiles = async (
         const dir = `${BASE_DIR}${mangaSlug}/${chapterSlug}/`
         await FileSystem.deleteAsync(dir, { idempotent: true })
     } catch (error) {
-        console.error('Error deleting chapter files:', error)
         throw error
     }
 }

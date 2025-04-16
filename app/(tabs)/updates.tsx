@@ -1,20 +1,17 @@
-import { CustomModal } from '@/components/ui/custom-modal'
 import { db } from '@/db'
 import { SavedMangaTable, UpdateTable } from '@/db/schema'
 import { extractNumberFromChapterTitle } from '@/lib/utils'
-import { useHeaderHeight } from '@react-navigation/elements'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { format, differenceInDays } from 'date-fns'
-import { desc, eq } from 'drizzle-orm'
+import { useQuery } from '@tanstack/react-query'
+import { differenceInDays, format } from 'date-fns'
+import { desc } from 'drizzle-orm'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { AlertCircle, BookOpen, Trash2 } from 'lucide-react-native'
-import { useCallback, useState } from 'react'
+import { AlertCircle, BookOpen } from 'lucide-react-native'
+import { useCallback } from 'react'
 import {
     ActivityIndicator,
-    FlatList,
+    SectionList,
     Text,
-    ToastAndroid,
     TouchableOpacity,
     View,
 } from 'react-native'
@@ -30,7 +27,6 @@ type UpdateGroup = {
 
 export default function UpdatesScreen() {
     const router = useRouter()
-    const headerHeight = useHeaderHeight()
 
     const {
         data: updates,
@@ -205,13 +201,13 @@ export default function UpdatesScreen() {
     }
 
     return (
-        <View
-            className='flex-1 bg-[#121218]'
-            style={{ paddingTop: headerHeight }}
-        >
-            <FlatList
-                data={updates.groups.flatMap((group) => group.data)}
+        <View className='flex-1 bg-[#121218]'>
+            <SectionList
+                sections={updates.groups}
                 renderItem={renderItem}
+                renderSectionHeader={({ section }) =>
+                    renderSectionHeader({ title: section.title })
+                }
                 keyExtractor={(item) => item.id.toString()}
                 maxToRenderPerBatch={20}
                 initialNumToRender={20}
@@ -220,20 +216,6 @@ export default function UpdatesScreen() {
                     offset: 100 * index,
                     index,
                 })}
-                ListHeaderComponent={() => (
-                    <>
-                        {updates?.groups.map(
-                            (group) =>
-                                group.data.length > 0 && (
-                                    <View key={group.title}>
-                                        {renderSectionHeader({
-                                            title: group.title,
-                                        })}
-                                    </View>
-                                ),
-                        )}
-                    </>
-                )}
             />
         </View>
     )

@@ -65,6 +65,7 @@ import {
     ActivityIndicator,
     BackHandler,
     Image,
+    NativeEventSubscription,
     Platform,
     RefreshControl,
     ScrollView,
@@ -568,6 +569,8 @@ const MangaDetails = () => {
     }, [selectedChapters, downloadedChapters])
 
     useEffect(() => {
+        let event: NativeEventSubscription | null = null
+
         const handler = () => {
             setIsSelectingChapters(false)
             setSelectedChapter(null)
@@ -577,11 +580,11 @@ const MangaDetails = () => {
         }
 
         if (isSelectingChapters) {
-            BackHandler.addEventListener('hardwareBackPress', handler)
+            event = BackHandler.addEventListener('hardwareBackPress', handler)
         }
 
         return () => {
-            BackHandler.removeEventListener('hardwareBackPress', handler)
+            event?.remove()
         }
     }, [isSelectingChapters])
 
@@ -1098,7 +1101,12 @@ const MangaDetails = () => {
 
     return (
         <>
-            <View className='flex-1 bg-[#121218]'>
+            <View
+                className='flex-1 bg-[#121218]'
+                style={{
+                    paddingBottom: insets.bottom,
+                }}
+            >
                 <Animated.FlatList
                     data={data.chapters.chapters as ChapterType[]}
                     keyExtractor={(item) => item.title}
@@ -1141,6 +1149,9 @@ const MangaDetails = () => {
                 />
 
                 <TouchableOpacity
+                    style={{
+                        marginBottom: insets.bottom,
+                    }}
                     className='absolute bottom-4 right-4 flex-row items-center justify-center gap-4 rounded-2xl bg-[#1e4976] p-4'
                     onPress={() => {
                         if (history != null) {

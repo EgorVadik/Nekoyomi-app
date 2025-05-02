@@ -8,6 +8,10 @@
         "scheme": "nekoyomi",
         "userInterfaceStyle": "automatic",
         "newArchEnabled": true,
+        "platforms": [
+            "ios",
+            "android"
+        ],
         "ios": {
             "supportsTablet": true
         },
@@ -16,12 +20,8 @@
                 "foregroundImage": "./assets/images/nekoyomi-logo.png",
                 "backgroundColor": "#ffffff"
             },
-            "package": "com.egorvadik.Nekoyomi"
-        },
-        "web": {
-            "bundler": "metro",
-            "output": "static",
-            "favicon": "./assets/images/nekoyomi-logo.png"
+            "package": "com.egorvadik.Nekoyomi",
+            "edgeToEdgeEnabled": true
         },
         "plugins": [
             "expo-router",
@@ -51,7 +51,9 @@
                     "defaultChannel": "default",
                     "enableBackgroundRemoteNotifications": false
                 }
-            ]
+            ],
+            "expo-font",
+            "expo-web-browser"
         ],
         "experiments": {
             "typedRoutes": true

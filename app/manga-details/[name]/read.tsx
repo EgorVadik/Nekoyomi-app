@@ -348,9 +348,7 @@ export default function MangaReaderScreen() {
                     .set({
                         currentPage:
                             currentPage >= totalChapterPages - 2
-                                ? // currentPage === totalChapterPages ||
-                                  // currentPage === totalChapterPages - 1
-                                  0
+                                ? 0
                                 : currentPage,
                     })
                     .where(eq(ReadChaptersTable.id, readChapter.id))
@@ -765,11 +763,14 @@ export default function MangaReaderScreen() {
                         renderItem={renderItem}
                         keyExtractor={keyExtractor}
                         onViewableItemsChanged={handleViewableItemsChanged}
+                        contentContainerStyle={{
+                            paddingBottom: insets.bottom,
+                        }}
                     />
                 </ReactNativeZoomableView>
 
                 {isLoadingNextChapter && (
-                    <View className='absolute bottom-24 left-1/2 -translate-x-1/2 flex-row items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>
+                    <View className='absolute bottom-24 left-1/2 z-50 -translate-x-1/2 flex-row items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>
                         <ActivityIndicator size='small' color='#ffffff' />
                         <Text className='ml-2 text-sm font-medium text-white'>
                             Loading next chapter...
@@ -778,7 +779,7 @@ export default function MangaReaderScreen() {
                 )}
 
                 {hasFailedToLoadNextChapter && !isLoadingNextChapter && (
-                    <View className='absolute bottom-24 left-1/2 -translate-x-1/2 flex-col items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>
+                    <View className='absolute bottom-24 left-1/2 z-50 -translate-x-1/2 flex-col items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>
                         <View className='flex-row items-center gap-2'>
                             <AlertCircle size={16} color='#ff6b6b' />
                             <Text className='text-sm font-medium text-white'>
@@ -795,8 +796,13 @@ export default function MangaReaderScreen() {
             </View>
 
             <Animated.View
-                style={[indicatorStyle]}
-                className='absolute bottom-8 right-4 flex-row items-center justify-center gap-4'
+                style={[
+                    indicatorStyle,
+                    {
+                        bottom: insets.bottom + 16,
+                    },
+                ]}
+                className='absolute right-4 flex-row items-center justify-center gap-4'
             >
                 {hasPreviousChapter && (
                     <TouchableOpacity

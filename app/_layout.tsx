@@ -1,13 +1,16 @@
 import { db } from '@/db'
 import migrations from '@/drizzle/migrations'
+import * as Task from '@/lib/background-task'
+import { verifyDownloads } from '@/lib/download'
 import { PortalHost } from '@rn-primitives/portal'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator'
+import * as Notifications from 'expo-notifications'
 import { router, Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { Search, X } from 'lucide-react-native'
 import { useEffect, useState } from 'react'
-import { Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { AppState, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import './global.css'
@@ -15,6 +18,13 @@ import './global.css'
 const queryClient = new QueryClient()
 
 SplashScreen.preventAutoHideAsync()
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: false,
+        shouldSetBadge: true,
+    }),
+})
 
 export default function RootLayout() {
     const { success, error } = useMigrations(db, migrations)
@@ -31,6 +41,29 @@ export default function RootLayout() {
             SplashScreen.hide()
         }
     }, [success, error])
+
+    useEffect(() => {
+        const requestPermission = async () => {
+            await Notifications.requestPermissionsAsync()
+            await verifyDownloads()
+        }
+
+        requestPermission()
+        Task.registerUpdateLibraryTask()
+
+        const subscription = AppState.addEventListener(
+            'change',
+            async (nextAppState) => {
+                if (nextAppState === 'active') {
+                    await verifyDownloads()
+                }
+            },
+        )
+
+        return () => {
+            subscription.remove()
+        }
+    }, [])
 
     return (
         <>

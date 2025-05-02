@@ -11,8 +11,8 @@ import {
     HistoryTable,
     ReadChaptersTable,
     SavedMangaTable,
-    UpdateTable,
 } from '@/db/schema'
+import { useUpdateLibrary } from '@/hooks/use-update-library'
 import { getChapterRequest, getMangaDetailsRequest } from '@/lib/api'
 import { filterAtom } from '@/lib/atoms'
 import { GENRES } from '@/lib/constants'
@@ -23,6 +23,8 @@ import {
     extractNumberFromChapterTitle,
     removeAllExtraSpaces,
 } from '@/lib/utils'
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
+import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import BottomSheet, {
     BottomSheetBackdrop,
     BottomSheetView,
@@ -54,16 +56,17 @@ import {
     Hourglass,
     Play,
     RefreshCcw,
+    Trash,
     User2,
 } from 'lucide-react-native'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { MotiView } from 'moti'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
-    FlatList,
+    BackHandler,
     Image,
     Platform,
     RefreshControl,
-    Animated as RnAnimated,
     ScrollView,
     Text,
     ToastAndroid,
@@ -85,7 +88,328 @@ const getDetailsFromDb = async (slug: string) => {
     return (result || null) as MangaDetailsType | null
 }
 
-export default function MangaDetails() {
+type ChapterType = {
+    link?: string
+    timeUploaded: Date | null
+    title: string
+    slug: string
+    isRead?: boolean
+    currentPage?: number | null
+}
+
+interface ChapterItemProps {
+    chapter: ChapterType
+    isSelectingChapters: boolean
+    selectedChapters: string[]
+    downloadedChapters:
+        | (typeof DownloadedChaptersTable.$inferSelect)[]
+        | undefined
+    downloadingChapters: string[]
+    onChapterPress: (chapter: ChapterType) => void
+    onChapterLongPress: (chapter: ChapterType) => void
+    onDownloadPress: (chapter: ChapterType) => void
+}
+
+const ChapterItem = memo(
+    ({
+        chapter,
+        isSelectingChapters,
+        selectedChapters,
+        downloadedChapters,
+        downloadingChapters,
+        onChapterPress,
+        onChapterLongPress,
+        onDownloadPress,
+    }: ChapterItemProps) => {
+        const isRead = chapter.isRead
+        const isSelected = selectedChapters.includes(chapter.slug)
+
+        return (
+            <TouchableOpacity
+                className={cn(
+                    'flex-row items-center justify-between px-4 py-4',
+                    isSelected && 'bg-[#2e2d33]',
+                )}
+                onPress={() => onChapterPress(chapter)}
+                onLongPress={() => onChapterLongPress(chapter)}
+                delayLongPress={500}
+            >
+                <View className='gap-2'>
+                    <Text className={cn('text-white', isRead && 'opacity-50')}>
+                        {chapter.title}
+                    </Text>
+                    <Text
+                        className={cn(
+                            'flex-row items-center text-sm text-gray-400',
+                            isRead && 'opacity-80',
+                        )}
+                    >
+                        {new Date(
+                            chapter.timeUploaded ?? new Date(),
+                        ).toLocaleDateString()}{' '}
+                        <Text className='text-xs text-gray-500'>
+                            {chapter.currentPage != null &&
+                                chapter.currentPage !== 0 &&
+                                `• Page: ${chapter.currentPage}`}
+                        </Text>
+                    </Text>
+                </View>
+
+                <TouchableOpacity
+                    disabled={isSelectingChapters}
+                    onPress={() => onDownloadPress(chapter)}
+                    className='p-2'
+                >
+                    {downloadingChapters.includes(chapter.slug) ? (
+                        <View className='items-center justify-center'>
+                            <ActivityIndicator size='small' color='#a9c8fc' />
+                        </View>
+                    ) : !downloadedChapters?.some(
+                          (downloaded) =>
+                              downloaded.chapterSlug === chapter.slug,
+                      ) ? (
+                        <ArrowDownCircle color={'#8e8d96'} />
+                    ) : (
+                        <CheckCircle2
+                            color={'#121218'}
+                            fill={'#fff'}
+                            strokeWidth={2}
+                        />
+                    )}
+                </TouchableOpacity>
+            </TouchableOpacity>
+        )
+    },
+)
+
+const Header = memo(
+    ({
+        data,
+        savedManga,
+        name,
+    }: {
+        data: MangaDetailsType
+        savedManga: boolean
+        name: string
+    }) => {
+        const [synopsisExpanded, setSynopsisExpanded] = useState(false)
+        const queryClient = useQueryClient()
+        const setFilters = useSetAtom(filterAtom)
+
+        return (
+            <>
+                {/* Header Section */}
+                <View className='relative h-72'>
+                    <Image
+                        source={{ uri: data.cover }}
+                        className='h-full w-full object-cover object-center'
+                        blurRadius={2}
+                    />
+                    <View className='absolute bottom-0 z-10 flex-row items-center gap-4 px-4'>
+                        <Image
+                            source={{ uri: data.cover }}
+                            className='h-44 w-28 rounded-md object-cover object-center'
+                        />
+                        <View className='w-full'>
+                            <Text
+                                className='mb-2 w-full max-w-[52%] text-2xl font-medium text-white'
+                                numberOfLines={3}
+                            >
+                                {data.title}
+                            </Text>
+                            <TouchableOpacity className='flex-row items-center gap-1'>
+                                <User2
+                                    className='text-[#908d94]'
+                                    size={14}
+                                    color={'#908d94'}
+                                />
+                                <Text className='font-medium text-[#908d94]'>
+                                    {removeAllExtraSpaces(data.author.name)}
+                                </Text>
+                            </TouchableOpacity>
+                            <View className='flex-row items-center gap-1'>
+                                {data.status === 'Ongoing' ? (
+                                    <Clock size={14} color={'#908d94'} />
+                                ) : (
+                                    <CheckCheck size={14} color={'#908d94'} />
+                                )}
+                                <Text className='font-medium text-[#908d94]'>
+                                    {data.status}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                    <LinearGradient
+                        colors={['transparent', '#121218']}
+                        className='absolute inset-0'
+                    />
+                </View>
+
+                {/* Action Buttons */}
+                <View className='flex-row justify-around bg-[#121218] p-4'>
+                    <TouchableOpacity
+                        className='items-center'
+                        onPress={async () => {
+                            if (savedManga) {
+                                try {
+                                    await db
+                                        .delete(SavedMangaTable)
+                                        .where(eq(SavedMangaTable.slug, name))
+                                    ToastAndroid.show(
+                                        'Removed from library',
+                                        ToastAndroid.SHORT,
+                                    )
+                                } catch (error) {
+                                    ToastAndroid.show(
+                                        'Failed to remove from library',
+                                        ToastAndroid.SHORT,
+                                    )
+                                }
+                            } else {
+                                try {
+                                    await db.insert(SavedMangaTable).values({
+                                        title: data.title,
+                                        cover: data.cover ?? '',
+                                        slug: name as string,
+                                        author: data.author,
+                                        status: data.status,
+                                        genres: data.genres,
+                                        chapters: data.chapters,
+                                        description: data.description ?? '',
+                                        lastUpdated: new Date(
+                                            data.lastUpdated ?? new Date(),
+                                        ).toISOString(),
+                                    })
+                                    ToastAndroid.show(
+                                        'Added to library',
+                                        ToastAndroid.SHORT,
+                                    )
+                                } catch (error) {
+                                    ToastAndroid.show(
+                                        'Failed to add to library',
+                                        ToastAndroid.SHORT,
+                                    )
+                                }
+                            }
+
+                            await queryClient.invalidateQueries({
+                                queryKey: ['saved-manga'],
+                                refetchType: 'all',
+                            })
+                        }}
+                    >
+                        <Heart
+                            color={savedManga ? '#a9c8fc' : '#908d94'}
+                            fill={savedManga ? '#a9c8fc' : 'none'}
+                            size={18}
+                        />
+                        <Text
+                            className={cn(
+                                'mt-1 text-center text-sm font-medium text-[#908d94]',
+                                savedManga && 'text-[#a9c8fc]',
+                            )}
+                        >
+                            {savedManga ? 'In Library' : 'Add to Library'}
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity className='items-center'>
+                        <Hourglass size={18} color={'#908d94'} />
+                        <Text className='mt-1 text-sm font-medium text-[#908d94]'>
+                            {data.status === 'Ongoing' ? 'Soon' : 'N/A'}
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity className='items-center'>
+                        <RefreshCcw size={18} color={'#908d94'} />
+                        <Text className='mt-1 text-sm font-medium text-[#908d94]'>
+                            Tracking
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity className='items-center'>
+                        <Earth size={18} color={'#908d94'} />
+                        <Text className='mt-1 text-sm font-medium text-[#908d94]'>
+                            WebView
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Description */}
+                <View
+                    className={cn(
+                        'relative h-16 overflow-hidden px-4',
+                        synopsisExpanded && 'h-auto pb-6',
+                    )}
+                >
+                    <Text className='font-medium text-[#908d94]'>
+                        {data.description}
+                    </Text>
+                    <LinearGradient
+                        colors={['transparent', '#121218']}
+                        className={cn(
+                            'absolute bottom-0 h-8 w-full',
+                            synopsisExpanded && 'h-0',
+                        )}
+                    >
+                        <TouchableOpacity
+                            onPress={() =>
+                                setSynopsisExpanded(!synopsisExpanded)
+                            }
+                            className='absolute bottom-0 left-0 right-0 items-center'
+                        >
+                            <MotiView
+                                animate={{
+                                    rotate: synopsisExpanded
+                                        ? '180deg'
+                                        : '0deg',
+                                }}
+                                transition={{
+                                    type: 'timing',
+                                    duration: 200,
+                                }}
+                            >
+                                <ChevronDown size={20} color={'#fff'} />
+                            </MotiView>
+                        </TouchableOpacity>
+                    </LinearGradient>
+                </View>
+
+                {/* Genres */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    className='mt-4'
+                    contentContainerClassName='gap-2 px-4'
+                >
+                    {data.genres.map((genre) => (
+                        <TouchableOpacity
+                            key={genre.name}
+                            className='rounded-lg border border-[#7e7d87] px-4 py-2'
+                            onPress={() => {
+                                setFilters({
+                                    filter: 'latest-all',
+                                    genre: genre.name as (typeof GENRES)[number],
+                                })
+                                router.push('/browse')
+                            }}
+                        >
+                            <Text className='font-medium text-[#c4c4ce]'>
+                                {genre.name}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                {/* Chapters Header */}
+                <View className='mt-6 px-4'>
+                    <Text className='mb-2 text-lg font-semibold text-white'>
+                        {data.chapters.totalChapters} chapters
+                    </Text>
+                </View>
+            </>
+        )
+    },
+)
+
+const MangaDetails = () => {
     const { name } = useLocalSearchParams()
     const { inLibrary } = useGlobalSearchParams()
     const queryClient = useQueryClient()
@@ -94,11 +418,11 @@ export default function MangaDetails() {
         MangaDetailsType['chapters']['chapters'][number] | null
     >(null)
     const [downloadingChapters, setDownloadingChapters] = useState<string[]>([])
-    const [isUpdating, setIsUpdating] = useState(false)
-    const [synopsisExpanded, setSynopsisExpanded] = useState(false)
+    const [isSelectingChapters, setIsSelectingChapters] = useState(false)
+    const [selectedChapters, setSelectedChapters] = useState<string[]>([])
     const scrollY = useSharedValue(0)
-    const setFilters = useSetAtom(filterAtom)
     const insets = useSafeAreaInsets()
+    const { updateLibrary, isUpdating } = useUpdateLibrary()
 
     const scrollHandler = useAnimatedScrollHandler({
         onScroll: (event) => {
@@ -214,102 +538,61 @@ export default function MangaDetails() {
         },
     })
 
-    const chevronRotation = useRef(new RnAnimated.Value(0)).current
-    const spin = chevronRotation.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '180deg'],
-    })
-
     const isRead = useMemo(() => {
         return readChapters?.some(
             (readChapter) => readChapter.chapterSlug === selectedChapter?.slug,
         )
     }, [readChapters, selectedChapter])
 
+    const isDownloaded = useMemo(() => {
+        return downloadedChapters?.some(
+            (downloaded) => downloaded.chapterSlug === selectedChapter?.slug,
+        )
+    }, [downloadedChapters, selectedChapter])
+
+    const hasDownloadedSelectedChapters = useMemo(() => {
+        return selectedChapters.some((chapter) =>
+            downloadedChapters?.some(
+                (downloaded) => downloaded.chapterSlug === chapter,
+            ),
+        )
+    }, [selectedChapters, downloadedChapters])
+
+    const hasNotDownloadedSelectedChapters = useMemo(() => {
+        return selectedChapters.some(
+            (chapter) =>
+                !downloadedChapters?.some(
+                    (downloaded) => downloaded.chapterSlug === chapter,
+                ),
+        )
+    }, [selectedChapters, downloadedChapters])
+
     useEffect(() => {
-        RnAnimated.spring(chevronRotation, {
-            friction: 8,
-            tension: 40,
-            toValue: synopsisExpanded ? 1 : 0,
-            useNativeDriver: true,
-        }).start()
-    }, [synopsisExpanded])
+        const handler = () => {
+            setIsSelectingChapters(false)
+            setSelectedChapter(null)
+            setSelectedChapters([])
+            bottomSheetRef.current?.close()
+            return true
+        }
+
+        if (isSelectingChapters) {
+            BackHandler.addEventListener('hardwareBackPress', handler)
+        }
+
+        return () => {
+            BackHandler.removeEventListener('hardwareBackPress', handler)
+        }
+    }, [isSelectingChapters])
 
     const handleRefetch = async () => {
         if (inLibrary === 'true') {
-            if (isUpdating) return
-            try {
-                setIsUpdating(true)
-                const backendData = await getMangaDetailsRequest({
-                    title: name as string,
-                })
-                if (!backendData) return
-
-                if (
-                    backendData.chapters.totalChapters !==
-                    data?.chapters.totalChapters
-                ) {
-                    const savedMangaId = savedManga?.id
-                    if (!savedMangaId) return
-
-                    const newChaptersDifference =
-                        backendData.chapters.chapters.length -
-                        (data?.chapters.chapters.length || 0)
-
-                    const newChapters = backendData.chapters.chapters.slice(
-                        0,
-                        newChaptersDifference,
-                    )
-
-                    await Promise.all([
-                        db
-                            .update(SavedMangaTable)
-                            .set({
-                                chapters: backendData.chapters,
-                            })
-                            .where(eq(SavedMangaTable.slug, name as string)),
-                        db.insert(UpdateTable).values(
-                            newChapters.map((chapter) => ({
-                                savedMangaId,
-                                chapterSlug: chapter.slug,
-                            })),
-                        ),
-                    ])
-
-                    await queryClient.invalidateQueries({
-                        queryKey: ['saved-manga', name],
-                    })
-
-                    await queryClient.invalidateQueries({
-                        queryKey: ['manga-details', name],
-                    })
-
-                    await queryClient.invalidateQueries({
-                        queryKey: ['download-queue'],
-                    })
-
-                    await queryClient.invalidateQueries({
-                        queryKey: ['saved-manga'],
-                    })
-
-                    ToastAndroid.show(
-                        `${backendData.chapters.totalChapters - (data?.chapters.totalChapters || 0)} new chapters found`,
-                        ToastAndroid.SHORT,
-                    )
-                } else {
-                    ToastAndroid.show(
-                        'No new chapters found',
-                        ToastAndroid.SHORT,
-                    )
-                }
-            } catch (error) {
-                ToastAndroid.show(
-                    'Failed to update manga details',
-                    ToastAndroid.SHORT,
-                )
-            } finally {
-                setIsUpdating(false)
-            }
+            await updateLibrary({
+                title: name as string,
+                totalChapters: data?.chapters.totalChapters || 0,
+                savedMangaId: savedManga?.id,
+                chaptersCount: data?.chapters.chapters.length || 0,
+            })
         } else {
             refetch()
         }
@@ -473,7 +756,10 @@ export default function MangaDetails() {
     )
 
     const handleDownloadChapter = useCallback(
-        async (chapter: MangaDetailsType['chapters']['chapters'][number]) => {
+        async (
+            chapter: MangaDetailsType['chapters']['chapters'][number],
+            isMultiDownload: boolean = false,
+        ) => {
             setDownloadingChapters((prev) => [...prev, chapter.slug])
 
             const isDownloading = downloadingChapters.includes(chapter.slug)
@@ -487,12 +773,13 @@ export default function MangaDetails() {
 
                 const pagesWithLocalPaths = await Promise.all(
                     chapterData.map(async (url, index) => {
-                        const localPath = await downloadImage(
+                        const { uri: localPath } = await downloadImage(
                             url,
                             name as string,
                             chapter.slug,
                             index,
                         )
+
                         return { url, localPath }
                     }),
                 )
@@ -503,11 +790,14 @@ export default function MangaDetails() {
                     pages: pagesWithLocalPaths,
                 })
 
-                ToastAndroid.show(
-                    'Chapter downloaded successfully',
-                    ToastAndroid.SHORT,
-                )
-                queryClient.invalidateQueries({
+                if (!isMultiDownload) {
+                    ToastAndroid.show(
+                        'Chapter downloaded successfully',
+                        ToastAndroid.SHORT,
+                    )
+                }
+
+                await queryClient.invalidateQueries({
                     queryKey: ['downloaded-chapters', name],
                 })
             } catch (error) {
@@ -521,11 +811,14 @@ export default function MangaDetails() {
                 )
             }
         },
-        [name, downloadingChapters],
+        [name, downloadingChapters, data],
     )
 
     const handleDeleteDownload = useCallback(
-        async (chapter: MangaDetailsType['chapters']['chapters'][number]) => {
+        async (
+            chapter: MangaDetailsType['chapters']['chapters'][number],
+            isMultiDelete: boolean = false,
+        ) => {
             try {
                 await deleteChapterFiles(name as string, chapter.slug)
 
@@ -543,11 +836,13 @@ export default function MangaDetails() {
                             ),
                         ),
                     )
-                ToastAndroid.show(
-                    'Chapter deleted successfully',
-                    ToastAndroid.SHORT,
-                )
-                queryClient.invalidateQueries({
+                if (!isMultiDelete) {
+                    ToastAndroid.show(
+                        'Chapter deleted successfully',
+                        ToastAndroid.SHORT,
+                    )
+                }
+                await queryClient.invalidateQueries({
                     queryKey: ['downloaded-chapters', name],
                 })
             } catch (error) {
@@ -587,7 +882,11 @@ export default function MangaDetails() {
                                   ),
                           )
                         : data.chapters.chapters.slice(-count)
-                await Promise.all(chapters.map(handleDownloadChapter))
+                await Promise.all(
+                    chapters.map((chapter) =>
+                        handleDownloadChapter(chapter, false),
+                    ),
+                )
                 return
             }
 
@@ -623,9 +922,133 @@ export default function MangaDetails() {
                     ToastAndroid.SHORT,
                 )
 
-            await Promise.all(chaptersToDownload.map(handleDownloadChapter))
+            await Promise.all(
+                chaptersToDownload.map((chapter) =>
+                    handleDownloadChapter(chapter, false),
+                ),
+            )
         },
         [downloadingChapters, data, handleDownloadChapter],
+    )
+
+    const toggleChapterSelection = useCallback(
+        (chapter: MangaDetailsType['chapters']['chapters'][number]) => {
+            setSelectedChapters((prev) =>
+                prev.includes(chapter.slug)
+                    ? prev.filter((slug) => slug !== chapter.slug)
+                    : [...prev, chapter.slug],
+            )
+        },
+        [],
+    )
+
+    const handleSelectAll = useCallback(() => {
+        if (!data) return
+        setSelectedChapters(
+            data.chapters.chapters.map((chapter) => chapter.slug),
+        )
+    }, [data])
+
+    const handleInvertSelection = useCallback(() => {
+        if (!data) return
+        const allChapterSlugs = data.chapters.chapters.map(
+            (chapter) => chapter.slug,
+        )
+        setSelectedChapters((prev) =>
+            allChapterSlugs.filter((slug) => !prev.includes(slug)),
+        )
+    }, [data])
+
+    const handleSelectBetween = useCallback(() => {
+        if (!data || selectedChapters.length < 2) return
+
+        const firstSelectedIndex = data.chapters.chapters.findIndex(
+            (chapter) => chapter.slug === selectedChapters[0],
+        )
+        const lastSelectedIndex = data.chapters.chapters.findIndex(
+            (chapter) =>
+                chapter.slug === selectedChapters[selectedChapters.length - 1],
+        )
+
+        if (firstSelectedIndex === -1 || lastSelectedIndex === -1) return
+
+        const startIndex = Math.min(firstSelectedIndex, lastSelectedIndex)
+        const endIndex = Math.max(firstSelectedIndex, lastSelectedIndex)
+
+        const chaptersToSelect = data.chapters.chapters
+            .slice(startIndex, endIndex + 1)
+            .map((chapter) => chapter.slug)
+
+        setSelectedChapters(chaptersToSelect)
+    }, [data, selectedChapters])
+
+    const handleDeleteSelectedChapters = useCallback(async () => {
+        const filteredChapters = downloadedChapters?.filter((chapter) =>
+            selectedChapters.includes(chapter.chapterSlug),
+        )
+        if (!filteredChapters) return
+        await Promise.all(
+            filteredChapters.map((chapter) =>
+                handleDeleteDownload(
+                    {
+                        slug: chapter.chapterSlug,
+                        title: chapter.mangaSlug,
+                        timeUploaded: chapter.downloadedAt,
+                    },
+                    true,
+                ),
+            ),
+        )
+    }, [downloadedChapters, selectedChapters, handleDeleteDownload])
+
+    const handleDownloadSelectedChapters = useCallback(async () => {
+        const notDownloadedChapters = selectedChapters.filter(
+            (chapter) =>
+                !downloadedChapters?.some(
+                    (downloaded) => downloaded.chapterSlug === chapter,
+                ),
+        )
+
+        if (!notDownloadedChapters) return
+        await Promise.all(
+            notDownloadedChapters.map((chapter) =>
+                handleDownloadChapter(
+                    {
+                        slug: chapter,
+                        title: name as string,
+                        timeUploaded: new Date(),
+                    },
+                    true,
+                ),
+            ),
+        )
+    }, [selectedChapters, handleDownloadChapter, downloadedChapters])
+
+    const handleChapterPress = useCallback(
+        (chapter: ChapterType) => {
+            if (isSelectingChapters) {
+                toggleChapterSelection(chapter)
+            } else {
+                router.push(
+                    `/manga-details/${name}/read?chapter=${encodeURIComponent(chapter.slug)}`,
+                )
+            }
+        },
+        [isSelectingChapters, name, toggleChapterSelection],
+    )
+
+    const handleDownloadPress = useCallback(
+        (chapter: ChapterType) => {
+            const isDownloaded = downloadedChapters?.some(
+                (downloaded) => downloaded.chapterSlug === chapter.slug,
+            )
+            if (isDownloaded) {
+                handleDeleteDownload(chapter)
+            } else {
+                handleDownloadChapter(chapter)
+            }
+        },
+        [downloadedChapters, handleDeleteDownload, handleDownloadChapter],
     )
 
     if (isLoading) {
@@ -676,12 +1099,31 @@ export default function MangaDetails() {
     return (
         <>
             <View className='flex-1 bg-[#121218]'>
-                <Animated.ScrollView
-                    className='flex-1'
+                <Animated.FlatList
+                    data={data.chapters.chapters as ChapterType[]}
+                    keyExtractor={(item) => item.title}
+                    renderItem={({ item }) => (
+                        <ChapterItem
+                            chapter={item}
+                            isSelectingChapters={isSelectingChapters}
+                            selectedChapters={selectedChapters}
+                            downloadedChapters={downloadedChapters}
+                            downloadingChapters={downloadingChapters}
+                            onChapterPress={handleChapterPress}
+                            onChapterLongPress={handleChapterLongPress}
+                            onDownloadPress={handleDownloadPress}
+                        />
+                    )}
+                    ListHeaderComponent={
+                        <Header
+                            data={data}
+                            savedManga={!!savedManga}
+                            name={name as string}
+                        />
+                    }
                     onScroll={scrollHandler}
                     scrollEventThrottle={16}
                     overScrollMode='always'
-                    decelerationRate={'fast'}
                     showsVerticalScrollIndicator={true}
                     scrollsToTop
                     refreshControl={
@@ -693,316 +1135,10 @@ export default function MangaDetails() {
                     contentContainerStyle={{
                         paddingBottom: 64,
                     }}
-                >
-                    {/* Header Section */}
-                    <View className='relative h-72'>
-                        <Image
-                            source={{ uri: data.cover }}
-                            className='h-full w-full object-cover object-center'
-                            blurRadius={2}
-                        />
-                        <View className='absolute bottom-0 z-10 flex-row items-center gap-4 px-4'>
-                            <Image
-                                source={{ uri: data.cover }}
-                                className='h-44 w-28 rounded-md object-cover object-center'
-                            />
-                            <View className='w-full'>
-                                <Text
-                                    className='mb-2 w-full max-w-[52%] text-2xl font-medium text-white'
-                                    numberOfLines={3}
-                                >
-                                    {data.title}
-                                </Text>
-                                <TouchableOpacity className='flex-row items-center gap-1'>
-                                    <User2
-                                        className='text-[#908d94]'
-                                        size={14}
-                                        color={'#908d94'}
-                                    />
-                                    <Text className='font-medium text-[#908d94]'>
-                                        {removeAllExtraSpaces(data.author.name)}
-                                    </Text>
-                                </TouchableOpacity>
-                                <View className='flex-row items-center gap-1'>
-                                    {data.status === 'Ongoing' ? (
-                                        <Clock size={14} color={'#908d94'} />
-                                    ) : (
-                                        <CheckCheck
-                                            size={14}
-                                            color={'#908d94'}
-                                        />
-                                    )}
-                                    <Text className='font-medium text-[#908d94]'>
-                                        {data.status}
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
-                        <LinearGradient
-                            colors={['transparent', '#121218']}
-                            className='absolute inset-0'
-                        />
-                    </View>
-
-                    {/* Action Buttons */}
-                    <View className='flex-row justify-around bg-[#121218] p-4'>
-                        <TouchableOpacity
-                            className='items-center'
-                            onPress={async () => {
-                                if (savedManga) {
-                                    try {
-                                        await db
-                                            .delete(SavedMangaTable)
-                                            .where(
-                                                eq(
-                                                    SavedMangaTable.slug,
-                                                    name as string,
-                                                ),
-                                            )
-                                        ToastAndroid.show(
-                                            'Removed from library',
-                                            ToastAndroid.SHORT,
-                                        )
-                                    } catch (error) {
-                                        ToastAndroid.show(
-                                            'Failed to remove from library',
-                                            ToastAndroid.SHORT,
-                                        )
-                                    }
-                                } else {
-                                    try {
-                                        await db
-                                            .insert(SavedMangaTable)
-                                            .values({
-                                                title: data.title,
-                                                cover: data.cover ?? '',
-                                                slug: name as string,
-                                                author: data.author,
-                                                status: data.status,
-                                                genres: data.genres,
-                                                chapters: data.chapters,
-                                                description:
-                                                    data.description ?? '',
-                                                lastUpdated: new Date(
-                                                    data.lastUpdated ??
-                                                        new Date(),
-                                                ).toISOString(),
-                                            })
-                                        ToastAndroid.show(
-                                            'Added to library',
-                                            ToastAndroid.SHORT,
-                                        )
-                                    } catch (error) {
-                                        ToastAndroid.show(
-                                            'Failed to add to library',
-                                            ToastAndroid.SHORT,
-                                        )
-                                    }
-                                }
-
-                                await queryClient.invalidateQueries({
-                                    queryKey: ['saved-manga'],
-                                    refetchType: 'all',
-                                })
-                            }}
-                        >
-                            <Heart
-                                color={savedManga ? '#a9c8fc' : '#908d94'}
-                                fill={savedManga ? '#a9c8fc' : 'none'}
-                                size={18}
-                            />
-                            <Text
-                                className={cn(
-                                    'mt-1 text-center text-sm font-medium text-[#908d94]',
-                                    savedManga && 'text-[#a9c8fc]',
-                                )}
-                            >
-                                {savedManga ? 'In Library' : 'Add to Library'}
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity className='items-center'>
-                            <Hourglass size={18} color={'#908d94'} />
-                            <Text className='mt-1 text-sm font-medium text-[#908d94]'>
-                                {data.status === 'Ongoing' ? 'Soon' : 'N/A'}
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity className='items-center'>
-                            <RefreshCcw size={18} color={'#908d94'} />
-                            <Text className='mt-1 text-sm font-medium text-[#908d94]'>
-                                Tracking
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity className='items-center'>
-                            <Earth size={18} color={'#908d94'} />
-                            <Text className='mt-1 text-sm font-medium text-[#908d94]'>
-                                WebView
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Description */}
-                    <View
-                        className={cn(
-                            'relative h-16 overflow-hidden px-4',
-                            synopsisExpanded && 'h-auto pb-6',
-                        )}
-                    >
-                        <Text className='font-medium text-[#908d94]'>
-                            {data.description}
-                        </Text>
-                        <LinearGradient
-                            colors={['transparent', '#121218']}
-                            className={cn(
-                                'absolute bottom-0 h-8 w-full',
-                                synopsisExpanded && 'h-0',
-                            )}
-                        >
-                            <TouchableOpacity
-                                onPress={() =>
-                                    setSynopsisExpanded(!synopsisExpanded)
-                                }
-                                className='absolute bottom-0 left-0 right-0 items-center'
-                            >
-                                <RnAnimated.View
-                                    style={{
-                                        transform: [{ rotate: spin }],
-                                    }}
-                                >
-                                    <ChevronDown size={20} color={'#fff'} />
-                                </RnAnimated.View>
-                            </TouchableOpacity>
-                        </LinearGradient>
-                    </View>
-
-                    {/* Genres */}
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        className='mt-4'
-                        contentContainerClassName='gap-2 px-4'
-                    >
-                        {data.genres.map((genre) => (
-                            <TouchableOpacity
-                                key={genre.name}
-                                className='rounded-lg border border-[#7e7d87] px-4 py-2'
-                                onPress={() => {
-                                    setFilters({
-                                        filter: 'latest-all',
-                                        genre: genre.name as (typeof GENRES)[number],
-                                    })
-                                    router.push('/browse')
-                                }}
-                            >
-                                <Text className='font-medium text-[#c4c4ce]'>
-                                    {genre.name}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-
-                    {/* Chapters */}
-                    <View className='mt-6 px-4'>
-                        <Text className='mb-2 text-lg font-semibold text-white'>
-                            {data.chapters.totalChapters} chapters
-                        </Text>
-                        <FlatList
-                            data={data.chapters.chapters}
-                            keyExtractor={(item) => item.title}
-                            scrollEnabled={false}
-                            renderItem={({ item: chapter }) => {
-                                const isRead = chapter.isRead
-                                return (
-                                    <TouchableOpacity
-                                        className='flex-row items-center justify-between py-4'
-                                        onPress={() => {
-                                            router.push(
-                                                `/manga-details/${name}/read?chapter=${encodeURIComponent(chapter.slug)}`,
-                                            )
-                                        }}
-                                        onLongPress={() =>
-                                            handleChapterLongPress(chapter)
-                                        }
-                                        delayLongPress={500}
-                                    >
-                                        <View className='gap-2'>
-                                            <Text
-                                                className={cn(
-                                                    'text-white',
-                                                    isRead && 'opacity-50',
-                                                )}
-                                            >
-                                                {chapter.title}
-                                            </Text>
-                                            <Text
-                                                className={cn(
-                                                    'flex-row items-center text-sm text-gray-400',
-                                                    isRead && 'opacity-80',
-                                                )}
-                                            >
-                                                {new Date(
-                                                    chapter.timeUploaded ??
-                                                        new Date(),
-                                                ).toLocaleDateString()}{' '}
-                                                <Text className='text-xs text-gray-500'>
-                                                    {chapter.currentPage !=
-                                                        null &&
-                                                        chapter.currentPage !==
-                                                            0 &&
-                                                        `• Page: ${chapter.currentPage}`}
-                                                </Text>
-                                            </Text>
-                                        </View>
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                const isDownloaded =
-                                                    downloadedChapters?.some(
-                                                        (downloaded) =>
-                                                            downloaded.chapterSlug ===
-                                                            chapter.slug,
-                                                    )
-                                                if (isDownloaded) {
-                                                    handleDeleteDownload(
-                                                        chapter,
-                                                    )
-                                                } else {
-                                                    handleDownloadChapter(
-                                                        chapter,
-                                                    )
-                                                }
-                                            }}
-                                            className='p-2'
-                                        >
-                                            {downloadingChapters.includes(
-                                                chapter.slug,
-                                            ) ? (
-                                                <View className='items-center justify-center'>
-                                                    <ActivityIndicator
-                                                        size='small'
-                                                        color='#a9c8fc'
-                                                    />
-                                                </View>
-                                            ) : !downloadedChapters?.some(
-                                                  (downloaded) =>
-                                                      downloaded.chapterSlug ===
-                                                      chapter.slug,
-                                              ) ? (
-                                                <ArrowDownCircle
-                                                    color={'#8e8d96'}
-                                                />
-                                            ) : (
-                                                <CheckCircle2
-                                                    color={'#121218'}
-                                                    fill={'#fff'}
-                                                    strokeWidth={2}
-                                                />
-                                            )}
-                                        </TouchableOpacity>
-                                    </TouchableOpacity>
-                                )
-                            }}
-                        />
-                    </View>
-                </Animated.ScrollView>
+                    maxToRenderPerBatch={10}
+                    initialNumToRender={10}
+                    windowSize={12}
+                />
 
                 <TouchableOpacity
                     className='absolute bottom-4 right-4 flex-row items-center justify-center gap-4 rounded-2xl bg-[#1e4976] p-4'
@@ -1030,54 +1166,128 @@ export default function MangaDetails() {
 
             <BottomSheet
                 ref={bottomSheetRef}
-                enablePanDownToClose
+                enablePanDownToClose={!isSelectingChapters}
                 index={-1}
                 enableDynamicSizing
-                backdropComponent={(props) => (
-                    <BottomSheetBackdrop
-                        {...props}
-                        appearsOnIndex={0}
-                        disappearsOnIndex={-1}
-                    />
-                )}
+                backdropComponent={
+                    isSelectingChapters
+                        ? null
+                        : (props) => (
+                              <BottomSheetBackdrop
+                                  {...props}
+                                  appearsOnIndex={0}
+                                  disappearsOnIndex={-1}
+                              />
+                          )
+                }
                 backgroundStyle={{ backgroundColor: '#1a1c23' }}
             >
-                <BottomSheetView className='flex-1 px-4 pb-7'>
+                <BottomSheetView
+                    className={cn(
+                        'flex-1 px-4',
+                        !isSelectingChapters && 'pb-7',
+                    )}
+                >
                     <View className='flex-row items-center justify-between border-b border-[#2e2d33] pb-4'>
                         <Text className='text-lg font-semibold text-white'>
-                            {selectedChapter?.title}
+                            {isSelectingChapters
+                                ? 'Select Chapters'
+                                : selectedChapter?.title}
                         </Text>
                     </View>
                     <View className='mt-4 flex-row justify-around'>
-                        <TouchableOpacity
-                            className='items-center'
-                            onPress={() => handleMarkAsRead('single')}
-                        >
-                            <CheckCheckIcon size={24} color='#908d94' />
-                            <Text className='mt-1 text-sm font-medium text-[#908d94]'>
-                                {isRead ? 'Mark as Unread' : 'Mark as Read'}
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            className='items-center'
-                            onPress={() => handleMarkAsRead('multiple')}
-                        >
-                            <View className='relative'>
-                                <Check size={24} color='#908d94' />
-                                <ArrowDown
-                                    style={{
-                                        position: 'absolute',
-                                        bottom: 0,
-                                        right: 0,
-                                    }}
-                                    size={12}
-                                    color='#908d94'
-                                />
-                            </View>
-                            <Text className='mt-1 text-sm font-medium text-[#908d94]'>
-                                Mark Below as Read
-                            </Text>
-                        </TouchableOpacity>
+                        {!isSelectingChapters ? (
+                            <>
+                                <TouchableOpacity
+                                    className='items-center'
+                                    onPress={() => handleMarkAsRead('single')}
+                                >
+                                    <CheckCheckIcon size={24} color='#908d94' />
+                                    <Text className='mt-1 text-sm font-medium text-[#908d94]'>
+                                        {isRead
+                                            ? 'Mark as Unread'
+                                            : 'Mark as Read'}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    className='items-center'
+                                    onPress={() => handleMarkAsRead('multiple')}
+                                >
+                                    <View className='relative'>
+                                        <Check size={24} color='#908d94' />
+                                        <ArrowDown
+                                            style={{
+                                                position: 'absolute',
+                                                bottom: 0,
+                                                right: 0,
+                                            }}
+                                            size={12}
+                                            color='#908d94'
+                                        />
+                                    </View>
+                                    <Text className='mt-1 text-sm font-medium text-[#908d94]'>
+                                        Mark Below as Read
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {isDownloaded && (
+                                    <TouchableOpacity
+                                        className='items-center'
+                                        onPress={handleDeleteSelectedChapters}
+                                    >
+                                        <Trash size={24} color='#908d94' />
+                                        <Text className='mt-1 text-sm font-medium text-[#908d94]'>
+                                            Delete
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {!isDownloaded && (
+                                    <TouchableOpacity
+                                        className='items-center'
+                                        onPress={handleDownloadSelectedChapters}
+                                    >
+                                        <ArrowDown size={24} color='#908d94' />
+                                        <Text className='mt-1 text-sm font-medium text-[#908d94]'>
+                                            Download
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                {!hasDownloadedSelectedChapters &&
+                                    !hasNotDownloadedSelectedChapters && (
+                                        <Text className='font-medium text-[#908d94]'>
+                                            No chapters selected
+                                        </Text>
+                                    )}
+
+                                {hasDownloadedSelectedChapters && (
+                                    <TouchableOpacity
+                                        className='items-center'
+                                        onPress={handleDeleteSelectedChapters}
+                                    >
+                                        <Trash size={24} color='#908d94' />
+                                        <Text className='mt-1 text-sm font-medium text-[#908d94]'>
+                                            Delete
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {hasNotDownloadedSelectedChapters && (
+                                    <TouchableOpacity
+                                        className='items-center'
+                                        onPress={handleDownloadSelectedChapters}
+                                    >
+                                        <ArrowDown size={24} color='#908d94' />
+                                        <Text className='mt-1 text-sm font-medium text-[#908d94]'>
+                                            Download
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </>
+                        )}
                     </View>
                 </BottomSheetView>
             </BottomSheet>
@@ -1104,163 +1314,228 @@ export default function MangaDetails() {
                                 animatedTitleOpacity,
                             ]}
                         >
-                            {data.title}
+                            {isSelectingChapters
+                                ? selectedChapters.length
+                                : data.title}
                         </Animated.Text>
                     ),
-                    headerRight: () => (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <TouchableOpacity hitSlop={15}>
-                                    <ArrowDownToLineIcon
-                                        size={24}
-                                        color={'#fff'}
-                                    />
-                                </TouchableOpacity>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                align='end'
-                                className='w-56 rounded border-0 bg-[#1a1c23] shadow-none'
-                                style={{
-                                    position:
-                                        Platform.OS !== 'web'
-                                            ? 'absolute'
-                                            : undefined,
-                                    top:
-                                        Platform.OS !== 'web'
-                                            ? insets.top + 45
-                                            : undefined,
-                                }}
-                            >
-                                <DropdownMenuGroup>
-                                    <DropdownMenuItem
-                                        className='native:py-4'
-                                        asChild
+                    headerRight: () =>
+                        isSelectingChapters ? (
+                            <>
+                                <View className='flex flex-row items-center justify-center gap-2'>
+                                    <TouchableOpacity
+                                        className='flex h-7 w-7 items-center justify-center'
+                                        onPressIn={handleSelectAll}
                                     >
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                const lastDownloadedChapter =
-                                                    downloadedChapters?.at(-1)
-                                                if (!lastDownloadedChapter) {
-                                                    const firstChapter =
-                                                        data.chapters.chapters.at(
+                                        <MaterialIcons
+                                            name='select-all'
+                                            size={24}
+                                            color={'#fff'}
+                                        />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        className='flex h-7 w-7 items-center justify-center'
+                                        onPressIn={handleInvertSelection}
+                                    >
+                                        <MaterialCommunityIcons
+                                            name='select-multiple'
+                                            size={24}
+                                            color={'#fff'}
+                                        />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        className='flex h-7 w-7 items-center justify-center'
+                                        onPressIn={handleSelectBetween}
+                                        disabled={selectedChapters.length < 2}
+                                    >
+                                        <MaterialCommunityIcons
+                                            name='select-place'
+                                            size={24}
+                                            color={'#fff'}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+                            </>
+                        ) : (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <TouchableOpacity
+                                        hitSlop={25}
+                                        className='flex h-7 w-7 items-center justify-center'
+                                    >
+                                        <ArrowDownToLineIcon
+                                            size={24}
+                                            color={'#fff'}
+                                        />
+                                    </TouchableOpacity>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    align='end'
+                                    className='w-56 rounded border-0 bg-[#1a1c23] shadow-none'
+                                    style={{
+                                        position:
+                                            Platform.OS !== 'web'
+                                                ? 'absolute'
+                                                : undefined,
+                                        top:
+                                            Platform.OS !== 'web'
+                                                ? insets.top + 45
+                                                : undefined,
+                                    }}
+                                >
+                                    <DropdownMenuGroup>
+                                        <DropdownMenuItem
+                                            className='native:py-4'
+                                            asChild
+                                        >
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    const lastDownloadedChapter =
+                                                        downloadedChapters?.at(
                                                             -1,
                                                         )
-                                                    if (!firstChapter)
-                                                        return ToastAndroid.show(
-                                                            'Failed to download first chapter',
-                                                            ToastAndroid.SHORT,
-                                                        )
-
-                                                    handleDownloadChapter(
-                                                        firstChapter,
-                                                    )
-                                                } else {
-                                                    const nextChapterIdx =
-                                                        data.chapters.chapters.findIndex(
-                                                            (chapter) =>
-                                                                chapter.slug ===
-                                                                lastDownloadedChapter.chapterSlug,
-                                                        )
                                                     if (
-                                                        nextChapterIdx === -1 ||
-                                                        nextChapterIdx === 0
-                                                    )
-                                                        return ToastAndroid.show(
-                                                            'No more chapters to download',
-                                                            ToastAndroid.SHORT,
-                                                        )
-                                                    const nextChapter =
-                                                        data.chapters.chapters.at(
-                                                            nextChapterIdx - 1,
-                                                        )
-                                                    if (!nextChapter)
-                                                        return ToastAndroid.show(
-                                                            'No more chapters to download',
-                                                            ToastAndroid.SHORT,
-                                                        )
+                                                        !lastDownloadedChapter
+                                                    ) {
+                                                        const firstChapter =
+                                                            data.chapters.chapters.at(
+                                                                -1,
+                                                            )
+                                                        if (!firstChapter)
+                                                            return ToastAndroid.show(
+                                                                'Failed to download first chapter',
+                                                                ToastAndroid.SHORT,
+                                                            )
 
-                                                    handleDownloadChapter(
-                                                        nextChapter,
+                                                        handleDownloadChapter(
+                                                            firstChapter,
+                                                        )
+                                                    } else {
+                                                        const nextChapterIdx =
+                                                            data.chapters.chapters.findIndex(
+                                                                (chapter) =>
+                                                                    chapter.slug ===
+                                                                    lastDownloadedChapter.chapterSlug,
+                                                            )
+                                                        if (
+                                                            nextChapterIdx ===
+                                                                -1 ||
+                                                            nextChapterIdx === 0
+                                                        )
+                                                            return ToastAndroid.show(
+                                                                'No more chapters to download',
+                                                                ToastAndroid.SHORT,
+                                                            )
+                                                        const nextChapter =
+                                                            data.chapters.chapters.at(
+                                                                nextChapterIdx -
+                                                                    1,
+                                                            )
+                                                        if (!nextChapter)
+                                                            return ToastAndroid.show(
+                                                                'No more chapters to download',
+                                                                ToastAndroid.SHORT,
+                                                            )
+
+                                                        handleDownloadChapter(
+                                                            nextChapter,
+                                                        )
+                                                    }
+                                                }}
+                                            >
+                                                <Text className='font-semibold text-white'>
+                                                    Next Chapter
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className='native:py-4'
+                                            asChild
+                                        >
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    handleDownloadMultipleChapters(
+                                                        5,
                                                     )
                                                 }
-                                            }}
+                                            >
+                                                <Text className='font-semibold text-white'>
+                                                    Next 5 Chapters
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className='native:py-4'
+                                            asChild
                                         >
-                                            <Text className='font-semibold text-white'>
-                                                Next Chapter
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        className='native:py-4'
-                                        asChild
-                                    >
-                                        <TouchableOpacity
-                                            onPress={() =>
-                                                handleDownloadMultipleChapters(
-                                                    5,
-                                                )
-                                            }
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    handleDownloadMultipleChapters(
+                                                        10,
+                                                    )
+                                                }}
+                                            >
+                                                <Text className='font-semibold text-white'>
+                                                    Next 10 Chapters
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className='native:py-4'
+                                            asChild
                                         >
-                                            <Text className='font-semibold text-white'>
-                                                Next 5 Chapters
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        className='native:py-4'
-                                        asChild
-                                    >
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                handleDownloadMultipleChapters(
-                                                    10,
-                                                )
-                                            }}
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    handleDownloadMultipleChapters(
+                                                        25,
+                                                    )
+                                                }}
+                                            >
+                                                <Text className='font-semibold text-white'>
+                                                    Next 25 Chapters
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className='native:py-4'
+                                            asChild
                                         >
-                                            <Text className='font-semibold text-white'>
-                                                Next 10 Chapters
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        className='native:py-4'
-                                        asChild
-                                    >
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                handleDownloadMultipleChapters(
-                                                    25,
-                                                )
-                                            }}
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    handleDownloadMultipleChapters(
+                                                        0,
+                                                        'unread',
+                                                    )
+                                                }}
+                                            >
+                                                <Text className='font-semibold text-white'>
+                                                    Unread
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className='native:py-4'
+                                            asChild
                                         >
-                                            <Text className='font-semibold text-white'>
-                                                Next 25 Chapters
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        className='native:py-4'
-                                        asChild
-                                    >
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                handleDownloadMultipleChapters(
-                                                    0,
-                                                    'unread',
-                                                )
-                                            }}
-                                        >
-                                            <Text className='font-semibold text-white'>
-                                                Unread
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </DropdownMenuItem>
-                                </DropdownMenuGroup>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    ),
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    setIsSelectingChapters(true)
+                                                    handleSnapPress(1)
+                                                }}
+                                            >
+                                                <Text className='font-semibold text-white'>
+                                                    Select
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuGroup>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        ),
                 }}
             />
         </>
     )
 }
+
+export default memo(MangaDetails)

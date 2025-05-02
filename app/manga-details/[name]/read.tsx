@@ -25,6 +25,7 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
+    ScrollView,
     SectionList,
     Text,
     ToastAndroid,
@@ -38,6 +39,7 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ReactNativeZoomableView } from '@openspacelabs/react-native-zoomable-view'
 
 const MangaPage = memo(
     ({
@@ -745,20 +747,26 @@ export default function MangaReaderScreen() {
     return (
         <>
             <View className='flex-1 bg-[#010001]'>
-                <SectionList
-                    sections={sections}
-                    showsVerticalScrollIndicator={false}
-                    SectionSeparatorComponent={SectionSeparator}
-                    onEndReachedThreshold={3}
-                    onEndReached={handleEndReached}
-                    maxToRenderPerBatch={5}
-                    initialNumToRender={5}
-                    windowSize={3}
-                    removeClippedSubviews={true}
-                    renderItem={renderItem}
-                    keyExtractor={keyExtractor}
-                    onViewableItemsChanged={handleViewableItemsChanged}
-                />
+                <ReactNativeZoomableView
+                    maxZoom={2.5}
+                    minZoom={1}
+                    panEnabled
+                    visualTouchFeedbackEnabled={false}
+                >
+                    <SectionList
+                        sections={sections}
+                        showsVerticalScrollIndicator={false}
+                        SectionSeparatorComponent={SectionSeparator}
+                        onEndReachedThreshold={0.85}
+                        onEndReached={handleEndReached}
+                        maxToRenderPerBatch={7}
+                        initialNumToRender={7}
+                        windowSize={8}
+                        renderItem={renderItem}
+                        keyExtractor={keyExtractor}
+                        onViewableItemsChanged={handleViewableItemsChanged}
+                    />
+                </ReactNativeZoomableView>
 
                 {isLoadingNextChapter && (
                     <View className='absolute bottom-24 left-1/2 -translate-x-1/2 flex-row items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>

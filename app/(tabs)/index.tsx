@@ -1,8 +1,8 @@
 import { MangaCard } from '@/components/manga-card'
-import { db } from '@/db'
-import { HistoryTable, ReadChaptersTable, SavedMangaTable } from '@/db/schema'
+import { useUpdateLibrary } from '@/hooks/use-update-library'
+import { getLibrary } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
-import { inArray } from 'drizzle-orm'
+import * as Notifications from 'expo-notifications'
 import { router } from 'expo-router'
 import { AlertCircle, BookOpen, Compass, RefreshCw } from 'lucide-react-native'
 import { useState } from 'react'
@@ -19,47 +19,57 @@ export default function LibraryScreen() {
     const { data, error, isLoading } = useQuery({
         queryKey: ['saved-manga'],
         queryFn: async () => {
-            const savedManga = await db.select().from(SavedMangaTable)
-
-            const [readChapters, history] = await Promise.all([
-                db
-                    .select()
-                    .from(ReadChaptersTable)
-                    .where(
-                        inArray(
-                            ReadChaptersTable.mangaSlug,
-                            savedManga.map((manga) => manga.slug),
-                        ),
-                    ),
-                db
-                    .select()
-                    .from(HistoryTable)
-                    .where(
-                        inArray(
-                            HistoryTable.mangaSlug,
-                            savedManga.map((manga) => manga.slug),
-                        ),
-                    ),
-            ])
-
-            const mangaWithUnreadCount = savedManga.map((manga) => ({
-                ...manga,
-                lastRead:
-                    history.find((h) => h.mangaSlug === manga.slug)?.readAt ||
-                    new Date(0),
-                unReadChaptersCount:
-                    (manga.chapters?.totalChapters ?? 0) -
-                    readChapters.filter(
-                        (chapter) => chapter.mangaSlug === manga.slug,
-                    ).length,
-            }))
-
+            const mangaWithUnreadCount = await getLibrary()
             return mangaWithUnreadCount.sort(
                 (a, b) => b.lastRead.getTime() - a.lastRead.getTime(),
             )
         },
         refetchOnMount: 'always',
     })
+    const { isUpdating, updateLibrary } = useUpdateLibrary()
+
+    const handleRefresh = async () => {
+        if (data == null) return
+
+        const notification = await Notifications.scheduleNotificationAsync({
+            content: {
+                title: 'Updating Library...',
+                autoDismiss: false,
+                sticky: true,
+            },
+            trigger: null,
+        })
+
+        const results = await Promise.all(
+            data.map((manga) =>
+                updateLibrary({
+                    title: manga.title,
+                    totalChapters: manga.chapters?.totalChapters ?? 0,
+                    chaptersCount: manga.chapters?.chapters.length ?? 0,
+                    savedMangaId: manga.id,
+                    showToast: false,
+                }),
+            ),
+        )
+
+        await Notifications.dismissNotificationAsync(notification)
+
+        const foundChapters = results.reduce(
+            (acc, curr) => acc + (curr?.found ?? 0),
+            0,
+        )
+
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title: 'Library updated',
+                body:
+                    foundChapters > 0
+                        ? `Found ${foundChapters} new chapters`
+                        : 'No new chapters found',
+            },
+            trigger: null,
+        })
+    }
 
     if (isLoading) {
         return (
@@ -134,6 +144,8 @@ export default function LibraryScreen() {
                 keyExtractor={(item) => item.title}
                 numColumns={2}
                 contentContainerStyle={{ padding: 8 }}
+                refreshing={isUpdating}
+                onRefresh={handleRefresh}
             />
         </View>
     )

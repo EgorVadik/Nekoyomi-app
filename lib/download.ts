@@ -1,6 +1,25 @@
+import { db } from '@/db'
+import { DownloadedChaptersTable } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 import * as FileSystem from 'expo-file-system'
+import { Directory } from 'expo-file-system/next'
 
-const BASE_DIR = `${FileSystem.cacheDirectory}downloaded_chapters/`
+const BASE_DIR = `${FileSystem.documentDirectory}Nekoyomi/downloads/`
+
+export const verifyDownloads = async () => {
+    const downloadedChapters = await db.select().from(DownloadedChaptersTable)
+
+    for (const chapter of downloadedChapters) {
+        const dirLocation = `${BASE_DIR}${chapter.mangaSlug}/${chapter.chapterSlug}/`
+        const dir = new Directory(dirLocation)
+        const exists = dir.exists && dir.list().length > 0
+        if (exists) continue
+
+        await db
+            .delete(DownloadedChaptersTable)
+            .where(eq(DownloadedChaptersTable.id, chapter.id))
+    }
+}
 
 export const downloadImage = async (
     url: string,
@@ -14,13 +33,13 @@ export const downloadImage = async (
         const filename = `page_${pageIndex}.jpg`
         const fileUri = `${dir}${filename}`
 
-        const { uri } = await FileSystem.downloadAsync(url, fileUri, {
+        const { uri, status } = await FileSystem.downloadAsync(url, fileUri, {
             headers: {
                 Referer: 'https://www.mangakakalot.gg/',
             },
         })
 
-        return uri
+        return { uri, status }
     } catch (error) {
         throw error
     }

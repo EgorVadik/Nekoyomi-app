@@ -4,7 +4,7 @@ import { HistoryTable } from '@/db/schema'
 import { extractNumberFromChapterTitle } from '@/lib/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { differenceInDays, format } from 'date-fns'
+import { differenceInDays, endOfDay, format } from 'date-fns'
 import { desc, eq } from 'drizzle-orm'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -75,8 +75,9 @@ export default function HistoryScreen() {
 
             const historyByDays = history.reduce(
                 (acc, item) => {
+                    const today = endOfDay(new Date())
                     const date = new Date(item.readAt ?? new Date())
-                    const daysAgo = differenceInDays(new Date(), date)
+                    const daysAgo = differenceInDays(today, date)
 
                     if (!acc[daysAgo]) {
                         acc[daysAgo] = []

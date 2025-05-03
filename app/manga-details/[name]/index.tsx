@@ -59,7 +59,7 @@ import {
     Trash,
     User2,
 } from 'lucide-react-native'
-import { MotiView } from 'moti'
+import { AnimatePresence, motify, MotiView } from 'moti'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
@@ -81,6 +81,8 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+
+const MotiTouchableOpacity = motify(TouchableOpacity)()
 
 const getDetailsFromDb = async (slug: string) => {
     const result = await db.query.SavedMangaTable.findFirst({
@@ -1136,6 +1138,7 @@ const MangaDetails = () => {
                     scrollsToTop
                     refreshControl={
                         <RefreshControl
+                            progressViewOffset={insets.top}
                             refreshing={isRefetching || isUpdating}
                             onRefresh={handleRefetch}
                         />
@@ -1198,6 +1201,9 @@ const MangaDetails = () => {
                         'flex-1 px-4',
                         !isSelectingChapters && 'pb-7',
                     )}
+                    style={{
+                        paddingBottom: insets.bottom + 10,
+                    }}
                 >
                     <View className='flex-row items-center justify-between border-b border-[#2e2d33] pb-4'>
                         <Text className='text-lg font-semibold text-white'>
@@ -1306,243 +1312,304 @@ const MangaDetails = () => {
             <Stack.Screen
                 options={{
                     headerTransparent: true,
-                    headerBackground() {
-                        return (
-                            <Animated.View
-                                style={animatedBgColor}
-                                pointerEvents='box-none'
-                            />
-                        )
-                    },
-                    headerTitle: () => (
-                        <Animated.Text
+                    header: ({ navigation: { goBack } }) => (
+                        <Animated.View
                             style={[
                                 {
-                                    color: 'white',
-                                    fontSize: 18,
-                                    fontWeight: '600',
+                                    height: 80,
+                                    paddingTop: insets.top + 16,
+                                    paddingHorizontal: 16,
                                 },
-                                animatedTitleOpacity,
+                                animatedBgColor,
                             ]}
+                            pointerEvents='box-none'
                         >
-                            {isSelectingChapters
-                                ? selectedChapters.length
-                                : data.title}
-                        </Animated.Text>
-                    ),
-                    headerRight: () =>
-                        isSelectingChapters ? (
-                            <>
-                                <View className='flex flex-row items-center justify-center gap-2'>
-                                    <TouchableOpacity
-                                        className='flex h-7 w-7 items-center justify-center'
-                                        onPressIn={handleSelectAll}
-                                    >
-                                        <MaterialIcons
-                                            name='select-all'
-                                            size={24}
-                                            color={'#fff'}
-                                        />
+                            <View className='flex-row justify-between'>
+                                <View className='flex-row items-center gap-2'>
+                                    <TouchableOpacity onPress={() => goBack()}>
+                                        <ArrowLeft size={24} color='#fff' />
                                     </TouchableOpacity>
-                                    <TouchableOpacity
-                                        className='flex h-7 w-7 items-center justify-center'
-                                        onPressIn={handleInvertSelection}
+                                    <Animated.Text
+                                        pointerEvents='box-none'
+                                        style={[
+                                            {
+                                                color: 'white',
+                                                fontSize: 18,
+                                                fontWeight: '600',
+                                            },
+                                            animatedTitleOpacity,
+                                        ]}
                                     >
-                                        <MaterialCommunityIcons
-                                            name='select-multiple'
-                                            size={24}
-                                            color={'#fff'}
-                                        />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        className='flex h-7 w-7 items-center justify-center'
-                                        onPressIn={handleSelectBetween}
-                                        disabled={selectedChapters.length < 2}
-                                    >
-                                        <MaterialCommunityIcons
-                                            name='select-place'
-                                            size={24}
-                                            color={'#fff'}
-                                        />
-                                    </TouchableOpacity>
+                                        {isSelectingChapters
+                                            ? selectedChapters.length
+                                            : data.title}
+                                    </Animated.Text>
                                 </View>
-                            </>
-                        ) : (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <TouchableOpacity
-                                        hitSlop={25}
-                                        className='flex h-7 w-7 items-center justify-center'
-                                    >
-                                        <ArrowDownToLineIcon
-                                            size={24}
-                                            color={'#fff'}
-                                        />
-                                    </TouchableOpacity>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                    align='end'
-                                    className='w-56 rounded border-0 bg-[#1a1c23] shadow-none'
-                                    style={{
-                                        position:
-                                            Platform.OS !== 'web'
-                                                ? 'absolute'
-                                                : undefined,
-                                        top:
-                                            Platform.OS !== 'web'
-                                                ? insets.top + 45
-                                                : undefined,
-                                    }}
-                                >
-                                    <DropdownMenuGroup>
-                                        <DropdownMenuItem
-                                            className='native:py-4'
-                                            asChild
+
+                                <AnimatePresence>
+                                    {isSelectingChapters ? (
+                                        <MotiView
+                                            from={{
+                                                opacity: 0,
+                                                scale: 0.9,
+                                            }}
+                                            animate={{
+                                                opacity: 1,
+                                                scale: 1,
+                                            }}
+                                            exit={{
+                                                opacity: 0,
+                                                scale: 0.9,
+                                            }}
+                                            exitTransition={{
+                                                type: 'spring',
+                                                duration: 2500,
+                                            }}
+                                            className='flex-row items-center gap-2'
                                         >
                                             <TouchableOpacity
-                                                onPress={() => {
-                                                    const lastDownloadedChapter =
-                                                        downloadedChapters?.at(
-                                                            -1,
-                                                        )
-                                                    if (
-                                                        !lastDownloadedChapter
-                                                    ) {
-                                                        const firstChapter =
-                                                            data.chapters.chapters.at(
-                                                                -1,
-                                                            )
-                                                        if (!firstChapter)
-                                                            return ToastAndroid.show(
-                                                                'Failed to download first chapter',
-                                                                ToastAndroid.SHORT,
-                                                            )
-
-                                                        handleDownloadChapter(
-                                                            firstChapter,
-                                                        )
-                                                    } else {
-                                                        const nextChapterIdx =
-                                                            data.chapters.chapters.findIndex(
-                                                                (chapter) =>
-                                                                    chapter.slug ===
-                                                                    lastDownloadedChapter.chapterSlug,
-                                                            )
-                                                        if (
-                                                            nextChapterIdx ===
-                                                                -1 ||
-                                                            nextChapterIdx === 0
-                                                        )
-                                                            return ToastAndroid.show(
-                                                                'No more chapters to download',
-                                                                ToastAndroid.SHORT,
-                                                            )
-                                                        const nextChapter =
-                                                            data.chapters.chapters.at(
-                                                                nextChapterIdx -
-                                                                    1,
-                                                            )
-                                                        if (!nextChapter)
-                                                            return ToastAndroid.show(
-                                                                'No more chapters to download',
-                                                                ToastAndroid.SHORT,
-                                                            )
-
-                                                        handleDownloadChapter(
-                                                            nextChapter,
-                                                        )
-                                                    }
-                                                }}
+                                                className='flex h-7 w-7 items-center justify-center'
+                                                onPressIn={handleSelectAll}
+                                                accessibilityHint='Select all chapters'
                                             >
-                                                <Text className='font-semibold text-white'>
-                                                    Next Chapter
-                                                </Text>
+                                                <MaterialIcons
+                                                    name='select-all'
+                                                    size={24}
+                                                    color={'#fff'}
+                                                />
                                             </TouchableOpacity>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            className='native:py-4'
-                                            asChild
-                                        >
                                             <TouchableOpacity
-                                                onPress={() =>
-                                                    handleDownloadMultipleChapters(
-                                                        5,
-                                                    )
+                                                className='flex h-7 w-7 items-center justify-center'
+                                                onPressIn={
+                                                    handleInvertSelection
                                                 }
                                             >
-                                                <Text className='font-semibold text-white'>
-                                                    Next 5 Chapters
-                                                </Text>
+                                                <MaterialCommunityIcons
+                                                    name='select-multiple'
+                                                    size={24}
+                                                    color={'#fff'}
+                                                />
                                             </TouchableOpacity>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            className='native:py-4'
-                                            asChild
-                                        >
                                             <TouchableOpacity
-                                                onPress={() => {
-                                                    handleDownloadMultipleChapters(
-                                                        10,
-                                                    )
+                                                className='flex h-7 w-7 items-center justify-center'
+                                                onPressIn={handleSelectBetween}
+                                                disabled={
+                                                    selectedChapters.length < 2
+                                                }
+                                            >
+                                                <MaterialCommunityIcons
+                                                    name='select-place'
+                                                    size={24}
+                                                    color={'#fff'}
+                                                />
+                                            </TouchableOpacity>
+                                        </MotiView>
+                                    ) : (
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <MotiTouchableOpacity
+                                                    from={{
+                                                        opacity: 0,
+                                                        scale: 0.9,
+                                                    }}
+                                                    animate={{
+                                                        opacity: 1,
+                                                        scale: 1,
+                                                    }}
+                                                    exit={{
+                                                        opacity: 0,
+                                                        scale: 0.9,
+                                                    }}
+                                                    exitTransition={{
+                                                        type: 'spring',
+                                                        duration: 2500,
+                                                    }}
+                                                    className='flex items-center justify-center'
+                                                >
+                                                    <ArrowDownToLineIcon
+                                                        size={24}
+                                                        color={'#fff'}
+                                                    />
+                                                </MotiTouchableOpacity>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent
+                                                align='end'
+                                                className='w-56 rounded border-0 bg-[#1a1c23] shadow-none'
+                                                style={{
+                                                    position:
+                                                        Platform.OS !== 'web'
+                                                            ? 'absolute'
+                                                            : undefined,
+                                                    top:
+                                                        Platform.OS !== 'web'
+                                                            ? insets.top + 45
+                                                            : undefined,
                                                 }}
                                             >
-                                                <Text className='font-semibold text-white'>
-                                                    Next 10 Chapters
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            className='native:py-4'
-                                            asChild
-                                        >
-                                            <TouchableOpacity
-                                                onPress={() => {
-                                                    handleDownloadMultipleChapters(
-                                                        25,
-                                                    )
-                                                }}
-                                            >
-                                                <Text className='font-semibold text-white'>
-                                                    Next 25 Chapters
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            className='native:py-4'
-                                            asChild
-                                        >
-                                            <TouchableOpacity
-                                                onPress={() => {
-                                                    handleDownloadMultipleChapters(
-                                                        0,
-                                                        'unread',
-                                                    )
-                                                }}
-                                            >
-                                                <Text className='font-semibold text-white'>
-                                                    Unread
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            className='native:py-4'
-                                            asChild
-                                        >
-                                            <TouchableOpacity
-                                                onPress={() => {
-                                                    setIsSelectingChapters(true)
-                                                    handleSnapPress(1)
-                                                }}
-                                            >
-                                                <Text className='font-semibold text-white'>
-                                                    Select
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </DropdownMenuItem>
-                                    </DropdownMenuGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        ),
+                                                <DropdownMenuGroup>
+                                                    <DropdownMenuItem
+                                                        className='native:py-4'
+                                                        asChild
+                                                    >
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                const lastDownloadedChapter =
+                                                                    downloadedChapters?.at(
+                                                                        -1,
+                                                                    )
+                                                                if (
+                                                                    !lastDownloadedChapter
+                                                                ) {
+                                                                    const firstChapter =
+                                                                        data.chapters.chapters.at(
+                                                                            -1,
+                                                                        )
+                                                                    if (
+                                                                        !firstChapter
+                                                                    )
+                                                                        return ToastAndroid.show(
+                                                                            'Failed to download first chapter',
+                                                                            ToastAndroid.SHORT,
+                                                                        )
+
+                                                                    handleDownloadChapter(
+                                                                        firstChapter,
+                                                                    )
+                                                                } else {
+                                                                    const nextChapterIdx =
+                                                                        data.chapters.chapters.findIndex(
+                                                                            (
+                                                                                chapter,
+                                                                            ) =>
+                                                                                chapter.slug ===
+                                                                                lastDownloadedChapter.chapterSlug,
+                                                                        )
+                                                                    if (
+                                                                        nextChapterIdx ===
+                                                                            -1 ||
+                                                                        nextChapterIdx ===
+                                                                            0
+                                                                    )
+                                                                        return ToastAndroid.show(
+                                                                            'No more chapters to download',
+                                                                            ToastAndroid.SHORT,
+                                                                        )
+                                                                    const nextChapter =
+                                                                        data.chapters.chapters.at(
+                                                                            nextChapterIdx -
+                                                                                1,
+                                                                        )
+                                                                    if (
+                                                                        !nextChapter
+                                                                    )
+                                                                        return ToastAndroid.show(
+                                                                            'No more chapters to download',
+                                                                            ToastAndroid.SHORT,
+                                                                        )
+
+                                                                    handleDownloadChapter(
+                                                                        nextChapter,
+                                                                    )
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Text className='font-semibold text-white'>
+                                                                Next Chapter
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className='native:py-4'
+                                                        asChild
+                                                    >
+                                                        <TouchableOpacity
+                                                            onPress={() =>
+                                                                handleDownloadMultipleChapters(
+                                                                    5,
+                                                                )
+                                                            }
+                                                        >
+                                                            <Text className='font-semibold text-white'>
+                                                                Next 5 Chapters
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className='native:py-4'
+                                                        asChild
+                                                    >
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                handleDownloadMultipleChapters(
+                                                                    10,
+                                                                )
+                                                            }}
+                                                        >
+                                                            <Text className='font-semibold text-white'>
+                                                                Next 10 Chapters
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className='native:py-4'
+                                                        asChild
+                                                    >
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                handleDownloadMultipleChapters(
+                                                                    25,
+                                                                )
+                                                            }}
+                                                        >
+                                                            <Text className='font-semibold text-white'>
+                                                                Next 25 Chapters
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className='native:py-4'
+                                                        asChild
+                                                    >
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                handleDownloadMultipleChapters(
+                                                                    0,
+                                                                    'unread',
+                                                                )
+                                                            }}
+                                                        >
+                                                            <Text className='font-semibold text-white'>
+                                                                Unread
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className='native:py-4'
+                                                        asChild
+                                                    >
+                                                        <TouchableOpacity
+                                                            onPress={() => {
+                                                                setIsSelectingChapters(
+                                                                    true,
+                                                                )
+                                                                handleSnapPress(
+                                                                    1,
+                                                                )
+                                                            }}
+                                                        >
+                                                            <Text className='font-semibold text-white'>
+                                                                Select
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuGroup>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    )}
+                                </AnimatePresence>
+                            </View>
+                        </Animated.View>
+                    ),
                 }}
             />
         </>

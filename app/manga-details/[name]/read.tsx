@@ -5,6 +5,7 @@ import {
     ReadChaptersTable,
 } from '@/db/schema'
 import { getChapterRequest, getMangaDetailsRequest } from '@/lib/api'
+import { ReactNativeZoomableView } from '@openspacelabs/react-native-zoomable-view'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { and, eq } from 'drizzle-orm'
@@ -25,7 +26,6 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
-    ScrollView,
     SectionList,
     Text,
     ToastAndroid,
@@ -39,7 +39,6 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ReactNativeZoomableView } from '@openspacelabs/react-native-zoomable-view'
 
 const MangaPage = memo(
     ({

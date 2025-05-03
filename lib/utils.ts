@@ -67,7 +67,7 @@ export const updateLibrary = async ({
         newChaptersDifference,
     )
 
-    await Promise.all([
+    const res = await Promise.all([
         db
             .update(SavedMangaTable)
             .set({
@@ -81,6 +81,8 @@ export const updateLibrary = async ({
             })),
         ),
     ])
+
+    console.log({ res })
 
     return {
         success: true,

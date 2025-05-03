@@ -1,10 +1,11 @@
 import { getLibrary, updateLibrary } from '@/lib/utils'
-import { hoursToSeconds } from 'date-fns'
-import * as BackgroundFetch from 'expo-background-fetch'
 import * as Notifications from 'expo-notifications'
 import * as TaskManager from 'expo-task-manager'
+import * as BackgroundTask from 'expo-background-task'
 
-TaskManager.defineTask('update-library', async () => {
+const BACKGROUND_TASK_IDENTIFIER = 'update-library'
+
+TaskManager.defineTask(BACKGROUND_TASK_IDENTIFIER, async () => {
     let notification: string | null = null
 
     try {
@@ -60,8 +61,9 @@ TaskManager.defineTask('update-library', async () => {
 })
 
 export const registerUpdateLibraryTask = async () => {
-    const interval = hoursToSeconds(5)
-    await BackgroundFetch.registerTaskAsync('update-library', {
-        minimumInterval: interval,
-    })
+    return await BackgroundTask.registerTaskAsync(BACKGROUND_TASK_IDENTIFIER)
+}
+
+export const unregisterUpdateLibraryTask = async () => {
+    return await BackgroundTask.unregisterTaskAsync(BACKGROUND_TASK_IDENTIFIER)
 }

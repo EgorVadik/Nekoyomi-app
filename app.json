@@ -1,62 +1,64 @@
 {
-    "expo": {
-        "name": "Nekoyomi",
-        "slug": "nekoyomi",
-        "version": "1.0.0",
-        "orientation": "portrait",
-        "icon": "./assets/images/nekoyomi-logo.png",
-        "scheme": "nekoyomi",
-        "userInterfaceStyle": "automatic",
-        "newArchEnabled": true,
-        "platforms": [
-            "ios",
-            "android"
-        ],
-        "ios": {
-            "supportsTablet": true
-        },
-        "android": {
-            "adaptiveIcon": {
-                "foregroundImage": "./assets/images/nekoyomi-logo.png",
-                "backgroundColor": "#ffffff"
-            },
-            "package": "com.egorvadik.Nekoyomi",
-            "edgeToEdgeEnabled": true
-        },
-        "plugins": [
-            "expo-router",
-            [
-                "expo-splash-screen",
-                {
-                    "image": "./assets/images/nekoyomi-splash.png",
-                    "imageWidth": 200,
-                    "resizeMode": "contain",
-                    "backgroundColor": "#202026"
-                }
-            ],
-            [
-                "expo-sqlite",
-                {
-                    "enableFTS": true,
-                    "useSQLCipher": true,
-                    "android": {
-                        "enableFTS": false,
-                        "useSQLCipher": false
-                    }
-                }
-            ],
-            [
-                "expo-notifications",
-                {
-                    "defaultChannel": "default",
-                    "enableBackgroundRemoteNotifications": false
-                }
-            ],
-            "expo-font",
-            "expo-web-browser"
-        ],
-        "experiments": {
-            "typedRoutes": true
+  "expo": {
+    "name": "Nekoyomi",
+    "slug": "nekoyomi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/nekoyomi-logo.png",
+    "scheme": "nekoyomi",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/nekoyomi-logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.egorvadik.Nekoyomi",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/nekoyomi-splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#202026"
         }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "enableFTS": true,
+          "useSQLCipher": true,
+          "android": {
+            "enableFTS": false,
+            "useSQLCipher": false
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default",
+          "enableBackgroundRemoteNotifications": false
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      "expo-background-task"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
     }
+  }
 }

@@ -214,14 +214,6 @@ export default function TabsLayout() {
                                     >
                                         <Search size={24} color={'white'} />
                                     </TouchableOpacity>
-
-                                    {/* <TouchableOpacity>
-                                        <ListFilter size={24} color={'white'} />
-                                    </TouchableOpacity>
-    
-                                    <TouchableOpacity>
-                                        <MoreVertical size={24} color={'white'} />
-                                    </TouchableOpacity> */}
                                 </View>
                             ),
                         }}
@@ -229,7 +221,7 @@ export default function TabsLayout() {
                     <Tabs.Screen
                         name='more'
                         options={{
-                            title: 'More',
+                            headerShown: false,
                         }}
                     />
                 </Tabs>
@@ -263,12 +255,15 @@ const TabBarItem = ({ icon, label, isActive, onPress }: TabBarItemProps) => {
             className='flex-1 items-center justify-center py-2'
         >
             <View className='flex items-center gap-2'>
-                {React.cloneElement(icon as React.ReactElement, {
-                    size: 24,
-                    color: isActive ? '#dbe1f7' : '#c5c5cf',
-                    opacity: isActive ? 1 : 0.8,
-                    strokeWidth: 2,
-                })}
+                {React.cloneElement(
+                    icon as React.ReactElement,
+                    {
+                        size: 24,
+                        color: isActive ? '#dbe1f7' : '#c5c5cf',
+                        opacity: isActive ? 1 : 0.8,
+                        strokeWidth: 2,
+                    } as any,
+                )}
                 <Text
                     className={'text-sm font-semibold'}
                     style={{

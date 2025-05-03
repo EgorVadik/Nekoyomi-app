@@ -1,11 +1,7 @@
-import { db } from '@/db'
-import { SavedMangaTable, UpdateTable } from '@/db/schema'
-import { getMangaDetailsRequest } from '@/lib/api'
+import { updateLibrary as updateLibraryUtils } from '@/lib/utils'
 import { useQueryClient } from '@tanstack/react-query'
-import { eq } from 'drizzle-orm'
 import { useState } from 'react'
 import { ToastAndroid } from 'react-native'
-import { updateLibrary as updateLibraryUtils } from '@/lib/utils'
 
 export const useUpdateLibrary = () => {
     const [isUpdating, setIsUpdating] = useState(false)

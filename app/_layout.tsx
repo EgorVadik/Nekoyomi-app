@@ -1,3 +1,4 @@
+import '@/app/global.css'
 import { db } from '@/db'
 import migrations from '@/drizzle/migrations'
 import * as Task from '@/lib/background-task'
@@ -13,16 +14,16 @@ import { useEffect, useState } from 'react'
 import { AppState, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import './global.css'
 
 const queryClient = new QueryClient()
 
 SplashScreen.preventAutoHideAsync()
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: false,
+        shouldPlaySound: true,
         shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
     }),
 })
 
@@ -76,6 +77,7 @@ export default function RootLayout() {
                     >
                         <Stack.Screen name='(tabs)' />
                         <Stack.Screen name='manga-details/[name]' />
+                        <Stack.Screen name='about' />
                         <Stack.Screen
                             name='search'
                             options={{

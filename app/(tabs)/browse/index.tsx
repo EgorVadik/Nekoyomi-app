@@ -1,6 +1,7 @@
 import { MangaCard } from '@/components/manga-card'
 import { getFilteredMangaListRequest } from '@/lib/api'
 import { filterAtom } from '@/lib/atoms'
+import { FlashList } from '@shopify/flash-list'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useAtomValue } from 'jotai'
 import { Box } from 'lucide-react-native'
@@ -60,7 +61,8 @@ export default function PopularScreen() {
 
     return (
         <View className='flex-1 bg-[#121218]'>
-            <FlatList
+            <FlashList
+                estimatedItemSize={279}
                 data={data.pages.flatMap((page) => page.data)}
                 renderItem={({ item }) => <MangaCard item={item} />}
                 keyExtractor={(item, idx) => `${item.slug}-${idx}`}

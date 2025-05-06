@@ -7,17 +7,25 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { differenceInDays, endOfDay, format } from 'date-fns'
 import { desc, eq } from 'drizzle-orm'
 import { Image } from 'expo-image'
-import { useRouter } from 'expo-router'
-import { AlertCircle, BookOpen, Trash2 } from 'lucide-react-native'
-import { useCallback, useState } from 'react'
+import { Tabs, useRouter } from 'expo-router'
+import { AlertCircle, BookOpen, Search, Trash2, X } from 'lucide-react-native'
+import { AnimatePresence, motify, MotiText } from 'moti'
+import { useCallback, useEffect, useState } from 'react'
 import {
     ActivityIndicator,
+    BackHandler,
     SectionList,
     Text,
+    TextInput,
     ToastAndroid,
     TouchableOpacity,
     View,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+
+const AnimatedTextInput = motify(TextInput)()
+const AnimatedX = motify(X)()
+const AnimatedSearch = motify(Search)()
 
 type HistoryGroup = {
     title: string
@@ -32,6 +40,70 @@ export default function HistoryScreen() {
         typeof HistoryTable.$inferSelect | null
     >(null)
     const headerHeight = useHeaderHeight()
+    const insets = useSafeAreaInsets()
+    const [showClearDialog, setShowClearDialog] = useState(false)
+    const [isSearchActive, setIsSearchActive] = useState(false)
+
+    const { mutate: clearHistory, isPending: isClearPending } = useMutation({
+        mutationFn: async () => {
+            await db.delete(HistoryTable)
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['history'] })
+            ToastAndroid.show('History cleared', ToastAndroid.SHORT)
+            setShowClearDialog(false)
+        },
+    })
+
+    const handleClearHistory = () => {
+        setShowClearDialog(true)
+    }
+
+    const handleSearch = (text: string) => {
+        queryClient.setQueryData(
+            ['history'],
+            (old: {
+                original: {
+                    title: string
+                    data: (typeof HistoryTable.$inferSelect)[]
+                }[]
+                grouped: {
+                    title: string
+                    data: (typeof HistoryTable.$inferSelect)[]
+                }[]
+            }) => {
+                return {
+                    ...old,
+                    grouped: old.original.map((group) => ({
+                        ...group,
+                        data: group.data.filter((item) =>
+                            item.mangaTitle
+                                .toLowerCase()
+                                .includes(text.toLowerCase()),
+                        ),
+                    })),
+                }
+            },
+        )
+    }
+
+    useEffect(() => {
+        const handler = BackHandler.addEventListener(
+            'hardwareBackPress',
+            () => {
+                if (isSearchActive) {
+                    setIsSearchActive(false)
+                    handleSearch('')
+                    return true
+                }
+                return false
+            },
+        )
+
+        return () => {
+            handler.remove()
+        }
+    }, [isSearchActive])
 
     const { mutate: deleteHistory, isPending } = useMutation({
         mutationFn: async (id: number) => {
@@ -239,6 +311,122 @@ export default function HistoryScreen() {
             className='flex-1 bg-[#121218]'
             style={{ paddingTop: headerHeight }}
         >
+            <Tabs.Screen
+                options={{
+                    headerTransparent: true,
+                    header: () => (
+                        <View
+                            style={{
+                                height: 90.6,
+                                paddingTop: insets.top,
+                            }}
+                            className='w-full flex-1 flex-row items-center justify-between gap-2 px-4'
+                        >
+                            <View className='h-full flex-1 flex-row items-center gap-2'>
+                                <AnimatePresence>
+                                    {isSearchActive ? (
+                                        <AnimatedTextInput
+                                            from={{
+                                                opacity: 0,
+                                                translateY: -15,
+                                            }}
+                                            animate={{
+                                                opacity: 1,
+                                                translateY: 0,
+                                            }}
+                                            exit={{
+                                                opacity: 0,
+                                                translateY: -15,
+                                            }}
+                                            transition={{
+                                                type: 'timing',
+                                                duration: 150,
+                                            }}
+                                            placeholder='Search...'
+                                            placeholderTextColor={'white'}
+                                            className='h-full flex-1 py-4 text-xl text-white'
+                                            autoFocus
+                                            cursorColor={'white'}
+                                            onChangeText={handleSearch}
+                                        />
+                                    ) : (
+                                        <MotiText
+                                            className='text-2xl font-semibold text-white'
+                                            from={{
+                                                opacity: 0,
+                                                translateY: 15,
+                                            }}
+                                            animate={{
+                                                opacity: 1,
+                                                translateY: 0,
+                                            }}
+                                            exit={{
+                                                opacity: 0,
+                                                translateY: 15,
+                                            }}
+                                            transition={{
+                                                type: 'timing',
+                                                duration: 150,
+                                            }}
+                                        >
+                                            History
+                                        </MotiText>
+                                    )}
+                                </AnimatePresence>
+                            </View>
+
+                            <View className='flex-row gap-5'>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setIsSearchActive(!isSearchActive)
+                                        if (isSearchActive) {
+                                            handleSearch('')
+                                        }
+                                    }}
+                                >
+                                    <AnimatePresence>
+                                        {isSearchActive ? (
+                                            <AnimatedX
+                                                size={24}
+                                                color={'white'}
+                                                from={{
+                                                    rotate: '45deg',
+                                                }}
+                                                animate={{
+                                                    rotate: '0deg',
+                                                }}
+                                                transition={{
+                                                    type: 'timing',
+                                                    duration: 150,
+                                                }}
+                                            />
+                                        ) : (
+                                            <AnimatedSearch
+                                                size={24}
+                                                color={'white'}
+                                                from={{
+                                                    rotate: '45deg',
+                                                }}
+                                                animate={{
+                                                    rotate: '0deg',
+                                                }}
+                                                transition={{
+                                                    type: 'timing',
+                                                    duration: 150,
+                                                }}
+                                            />
+                                        )}
+                                    </AnimatePresence>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={handleClearHistory}>
+                                    <Trash2 size={24} color={'white'} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ),
+                }}
+            />
+
             <SectionList
                 sections={history.grouped}
                 renderItem={renderItem}
@@ -266,6 +454,16 @@ export default function HistoryScreen() {
                 }
                 confirmText='Remove'
                 onConfirm={handleConfirmDelete}
+                isPending={isPending}
+            />
+
+            <CustomModal
+                visible={showClearDialog}
+                onClose={() => setShowClearDialog(false)}
+                title='Remove everything'
+                description='Are you sure? All history will be lost.'
+                confirmText='OK'
+                onConfirm={clearHistory}
                 isPending={isPending}
             />
         </View>

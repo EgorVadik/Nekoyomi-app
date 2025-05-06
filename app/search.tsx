@@ -1,16 +1,19 @@
 import { MangaCard } from '@/components/manga-card'
 import { searchMangaRequest } from '@/lib/api'
 import { useHeaderHeight } from '@react-navigation/elements'
+import { FlashList } from '@shopify/flash-list'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useGlobalSearchParams } from 'expo-router'
 import { Box } from 'lucide-react-native'
-import { ActivityIndicator, FlatList, Text, View } from 'react-native'
+import { ActivityIndicator, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function SearchScreen() {
     const { searchQuery } = useGlobalSearchParams()
     const isEnabled =
         typeof searchQuery === 'string' && searchQuery.trim() !== ''
     const headerHeight = useHeaderHeight()
+    const insets = useSafeAreaInsets()
     const {
         data,
         isLoading,
@@ -19,7 +22,6 @@ export default function SearchScreen() {
         isFetchingNextPage,
         refetch,
         isRefetching,
-        error,
     } = useInfiniteQuery({
         initialPageParam: 1,
         queryKey: ['search', searchQuery],
@@ -67,14 +69,20 @@ export default function SearchScreen() {
     return (
         <View
             className='flex-1 bg-[#121218]'
-            style={{ paddingTop: headerHeight }}
+            style={{
+                paddingTop: headerHeight,
+            }}
         >
-            <FlatList
+            <FlashList
+                estimatedItemSize={279}
                 data={data.pages.flatMap((page) => page.data)}
                 renderItem={({ item }) => <MangaCard item={item} />}
                 keyExtractor={(item, idx) => `${item.slug}-${idx}`}
                 numColumns={2}
-                contentContainerStyle={{ padding: 8 }}
+                contentContainerStyle={{
+                    padding: 8,
+                    paddingBottom: insets.bottom,
+                }}
                 onRefresh={refetch}
                 refreshing={isRefetching}
                 onEndReached={() => {

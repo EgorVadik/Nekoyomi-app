@@ -7,7 +7,7 @@ import { PortalHost } from '@rn-primitives/portal'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator'
 import * as Notifications from 'expo-notifications'
-import { router, Stack } from 'expo-router'
+import { router, Stack, usePathname } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { Search, X } from 'lucide-react-native'
 import { useEffect, useState } from 'react'
@@ -28,6 +28,7 @@ Notifications.setNotificationHandler({
 })
 
 export default function RootLayout() {
+    const pathname = usePathname()
     const { success, error } = useMigrations(db, migrations)
     const [isSearchActive, setIsSearchActive] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
@@ -143,6 +144,21 @@ export default function RootLayout() {
                                         </View>
                                     </View>
                                 ),
+                            }}
+                        />
+                        <Stack.Screen
+                            name='library-options'
+                            options={{
+                                presentation: 'transparentModal',
+                                // sheetAllowedDetents:
+                                //     pathname === '/library-options'
+                                //         ? [0.5]
+                                //         : [0.75],
+                                // sheetGrabberVisible: true,
+                                // contentStyle: {
+                                //     backgroundColor: '#1a1c23',
+                                // },
+                                // sheetCornerRadius: 12,
                             }}
                         />
                     </Stack>

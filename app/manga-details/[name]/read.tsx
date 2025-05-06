@@ -5,8 +5,6 @@ import {
     ReadChaptersTable,
 } from '@/db/schema'
 import { getChapterRequest, getMangaDetailsRequest } from '@/lib/api'
-import { ReactNativeZoomableView } from '@openspacelabs/react-native-zoomable-view'
-import { useHeaderHeight } from '@react-navigation/elements'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { and, eq } from 'drizzle-orm'
 import { Image } from 'expo-image'
@@ -16,6 +14,7 @@ import {
     useLocalSearchParams,
     useRouter,
 } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
 import capitalize from 'just-capitalize'
 import {
     AlertCircle,
@@ -30,8 +29,8 @@ import {
     Text,
     ToastAndroid,
     TouchableOpacity,
-    View,
     useWindowDimensions,
+    View,
 } from 'react-native'
 import Animated, {
     useAnimatedStyle,
@@ -85,10 +84,9 @@ const MangaPage = memo(
         )
 
         return (
-            <TouchableOpacity
+            <View
                 key={page.url}
-                activeOpacity={1}
-                onPress={onPress}
+                // onPress={onPress}
                 className='relative w-full items-center'
             >
                 {loadingStates[page.url] && (
@@ -126,7 +124,7 @@ const MangaPage = memo(
                     recyclingKey={page.url}
                     cachePolicy={'memory'}
                 />
-            </TouchableOpacity>
+            </View>
         )
     },
     (prevProps, nextProps) => {
@@ -153,7 +151,6 @@ const SectionSeparator = memo(({ section }: { section: { title: string } }) => (
 
 export default function MangaReaderScreen() {
     const queryClient = useQueryClient()
-    const headerHeight = useHeaderHeight()
     const insets = useSafeAreaInsets()
     const { name } = useLocalSearchParams()
     const { chapter } = useGlobalSearchParams()
@@ -165,7 +162,7 @@ export default function MangaReaderScreen() {
     const [isLoadingNextChapter, setIsLoadingNextChapter] = useState(false)
     const [hasFailedToLoadNextChapter, setHasFailedToLoadNextChapter] =
         useState(false)
-    const [, setIsControlsVisible] = useState(true)
+    const [isControlsVisible, setIsControlsVisible] = useState(true)
     const headerTranslateY = useSharedValue(0)
     const indicatorTranslateY = useSharedValue(0)
 
@@ -189,7 +186,7 @@ export default function MangaReaderScreen() {
         [key: string]: boolean
     }>({})
 
-    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+    const debounceTimerRef = useRef<number | null>(null)
 
     const toggleControls = useCallback(() => {
         setIsControlsVisible((prev) => {
@@ -198,7 +195,7 @@ export default function MangaReaderScreen() {
                 damping: 20,
                 stiffness: 200,
             })
-            indicatorTranslateY.value = withSpring(newValue ? 0 : 100, {
+            indicatorTranslateY.value = withSpring(newValue ? 0 : 150, {
                 damping: 20,
                 stiffness: 200,
             })
@@ -744,29 +741,56 @@ export default function MangaReaderScreen() {
     return (
         <>
             <View className='flex-1 bg-[#010001]'>
-                <ReactNativeZoomableView
+                {/* <Pressable onPress={toggleControls} className='flex-1'> */}
+                {/* <ReactNativeZoomableView
                     maxZoom={2.5}
                     minZoom={1}
-                    panEnabled
+                    zoomStep={Infinity}
                     visualTouchFeedbackEnabled={false}
-                >
-                    <SectionList
-                        sections={sections}
-                        showsVerticalScrollIndicator={false}
-                        SectionSeparatorComponent={SectionSeparator}
-                        onEndReachedThreshold={0.85}
-                        onEndReached={handleEndReached}
-                        maxToRenderPerBatch={7}
-                        initialNumToRender={7}
-                        windowSize={8}
-                        renderItem={renderItem}
-                        keyExtractor={keyExtractor}
-                        onViewableItemsChanged={handleViewableItemsChanged}
-                        contentContainerStyle={{
-                            paddingBottom: insets.bottom,
-                        }}
-                    />
-                </ReactNativeZoomableView>
+                    disablePanOnInitialZoom
+                    panBoundaryPadding={0}
+                    // onStartShouldSetPanResponderCapture={(e, gestureState) => {
+                    //     console.log({
+                    //         dx: gestureState.dx,
+                    //         dy: gestureState.dy,
+                    //     })
+
+                    //     return (
+                    //         Math.abs(gestureState.dx) > 5 &&
+                    //         Math.abs(gestureState.dy) < 5
+                    //     )
+                    // }}
+                    onMoveShouldSetPanResponderCapture={(_, gestureState) => {
+                        console.log({
+                            dx: gestureState.dx,
+                            dy: gestureState.dy,
+                        })
+
+                        return Math.abs(gestureState.dx) > 3
+                    }}
+                    onSingleTap={toggleControls}
+                    // panEnabled={false}
+                > */}
+                <SectionList
+                    sections={sections}
+                    showsVerticalScrollIndicator={false}
+                    SectionSeparatorComponent={SectionSeparator}
+                    onEndReachedThreshold={0.85}
+                    onEndReached={handleEndReached}
+                    maxToRenderPerBatch={7}
+                    initialNumToRender={7}
+                    windowSize={8}
+                    renderItem={renderItem}
+                    keyExtractor={keyExtractor}
+                    onViewableItemsChanged={handleViewableItemsChanged}
+                    contentContainerStyle={{
+                        paddingBottom: insets.bottom,
+                    }}
+                    disableScrollViewPanResponder
+                    nestedScrollEnabled
+                />
+                {/* </ReactNativeZoomableView> */}
+                {/* </Pressable> */}
 
                 {isLoadingNextChapter && (
                     <View className='absolute bottom-24 left-1/2 z-50 -translate-x-1/2 flex-row items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>
@@ -916,8 +940,8 @@ export default function MangaReaderScreen() {
                             style={[
                                 headerStyle,
                                 {
-                                    height: headerHeight,
                                     paddingTop: insets.top,
+                                    paddingBottom: 10,
                                 },
                             ]}
                             className='w-full bg-[#1c1e25]/80'
@@ -946,6 +970,8 @@ export default function MangaReaderScreen() {
                     ),
                 }}
             />
+
+            <StatusBar hidden={!isControlsVisible} />
         </>
     )
 }

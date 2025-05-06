@@ -287,7 +287,8 @@ export default function MoreScreen() {
                     {/* Footer */}
                     <View className='mb-5 mt-10 items-center'>
                         <Text className='text-xs text-gray-500'>
-                            © 2024 {applicationName}. All rights reserved.
+                            © {new Date().getFullYear()} {applicationName}. All
+                            rights reserved.
                         </Text>
                     </View>
                 </View>

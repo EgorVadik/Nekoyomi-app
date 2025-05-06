@@ -14,7 +14,7 @@ export const MangaCard = ({
 }) => {
     return (
         <TouchableOpacity
-            className='mb-2 w-1/2 p-1'
+            className='mb-2 p-1'
             onPress={() => {
                 router.push({
                     pathname: `/manga-details/[name]`,
@@ -26,7 +26,7 @@ export const MangaCard = ({
             }}
         >
             <View className='relative overflow-hidden rounded-md bg-gray-800'>
-                {unReadChaptersCount && unReadChaptersCount > 0 && (
+                {unReadChaptersCount != null && unReadChaptersCount > 0 && (
                     <View className='absolute left-2 top-2 z-10 flex-row items-center gap-1 rounded bg-[#bfc5db] p-1'>
                         <Text className='text-xs font-semibold text-black'>
                             {unReadChaptersCount}
@@ -42,7 +42,7 @@ export const MangaCard = ({
                     }}
                     className='aspect-[2/3] w-full'
                     resizeMode='cover'
-                    alt={item.cover}
+                    alt={item.title}
                 />
                 <LinearGradient
                     className='absolute bottom-0 left-0 right-0 flex h-14 items-start justify-end p-2'

@@ -28,6 +28,7 @@ export const useUpdateLibrary = () => {
                 totalChapters,
                 savedMangaId: savedMangaId || 0,
                 chaptersCount: chaptersCount || 0,
+                queryClient,
             })
 
             if (res?.found === 0) {

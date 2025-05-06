@@ -29,6 +29,7 @@ import BottomSheet, {
     BottomSheetBackdrop,
     BottomSheetView,
 } from '@gorhom/bottom-sheet'
+import { FlashList, type FlashListProps } from '@shopify/flash-list'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { and, eq } from 'drizzle-orm'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -72,6 +73,7 @@ import {
     Text,
     ToastAndroid,
     TouchableOpacity,
+    useWindowDimensions,
     View,
 } from 'react-native'
 import Animated, {
@@ -83,6 +85,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const MotiTouchableOpacity = motify(TouchableOpacity)()
+const AnimatedFlashList =
+    Animated.createAnimatedComponent<FlashListProps<ChapterType>>(FlashList)
 
 const getDetailsFromDb = async (slug: string) => {
     const result = await db.query.SavedMangaTable.findFirst({
@@ -297,7 +301,6 @@ const Header = memo(
 
                             await queryClient.invalidateQueries({
                                 queryKey: ['saved-manga'],
-                                refetchType: 'all',
                             })
                         }}
                     >
@@ -343,7 +346,7 @@ const Header = memo(
                     )}
                 >
                     <Text className='font-medium text-[#908d94]'>
-                        {data.description}
+                        {removeAllExtraSpaces(data.description)}
                     </Text>
                     <LinearGradient
                         colors={['transparent', '#121218']}
@@ -426,6 +429,7 @@ const MangaDetails = () => {
     const scrollY = useSharedValue(0)
     const insets = useSafeAreaInsets()
     const { updateLibrary, isUpdating } = useUpdateLibrary()
+    const { width } = useWindowDimensions()
 
     const scrollHandler = useAnimatedScrollHandler({
         onScroll: (event) => {
@@ -633,9 +637,12 @@ const MangaDetails = () => {
                     await db
                         .delete(ReadChaptersTable)
                         .where(
-                            eq(
-                                ReadChaptersTable.chapterSlug,
-                                selectedChapter.slug,
+                            and(
+                                eq(
+                                    ReadChaptersTable.chapterSlug,
+                                    selectedChapter.slug,
+                                ),
+                                eq(ReadChaptersTable.mangaSlug, name as string),
                             ),
                         )
                     queryClient.setQueryData(
@@ -1109,16 +1116,17 @@ const MangaDetails = () => {
                     paddingBottom: insets.bottom,
                 }}
             >
-                <Animated.FlatList
+                <AnimatedFlashList
                     data={data.chapters.chapters as ChapterType[]}
+                    estimatedItemSize={72}
                     keyExtractor={(item) => item.title}
-                    renderItem={({ item }) => (
+                    renderItem={({ item, extraData }) => (
                         <ChapterItem
                             chapter={item}
-                            isSelectingChapters={isSelectingChapters}
-                            selectedChapters={selectedChapters}
+                            isSelectingChapters={extraData.isSelectingChapters}
+                            selectedChapters={extraData.selectedChapters}
                             downloadedChapters={downloadedChapters}
-                            downloadingChapters={downloadingChapters}
+                            downloadingChapters={extraData.downloadingChapters}
                             onChapterPress={handleChapterPress}
                             onChapterLongPress={handleChapterLongPress}
                             onDownloadPress={handleDownloadPress}
@@ -1131,6 +1139,11 @@ const MangaDetails = () => {
                             name={name as string}
                         />
                     }
+                    extraData={{
+                        isSelectingChapters,
+                        downloadingChapters,
+                        selectedChapters,
+                    }}
                     onScroll={scrollHandler}
                     scrollEventThrottle={16}
                     overScrollMode='always'
@@ -1146,9 +1159,6 @@ const MangaDetails = () => {
                     contentContainerStyle={{
                         paddingBottom: 64,
                     }}
-                    maxToRenderPerBatch={10}
-                    initialNumToRender={10}
-                    windowSize={12}
                 />
 
                 <TouchableOpacity
@@ -1316,15 +1326,15 @@ const MangaDetails = () => {
                         <Animated.View
                             style={[
                                 {
-                                    height: 80,
                                     paddingTop: insets.top + 16,
+                                    paddingBottom: 16,
                                     paddingHorizontal: 16,
                                 },
                                 animatedBgColor,
                             ]}
                             pointerEvents='box-none'
                         >
-                            <View className='flex-row justify-between'>
+                            <View className='flex-row items-center justify-between'>
                                 <View className='flex-row items-center gap-2'>
                                     <TouchableOpacity onPress={() => goBack()}>
                                         <ArrowLeft size={24} color='#fff' />
@@ -1336,9 +1346,11 @@ const MangaDetails = () => {
                                                 color: 'white',
                                                 fontSize: 18,
                                                 fontWeight: '600',
+                                                maxWidth: width - 110,
                                             },
                                             animatedTitleOpacity,
                                         ]}
+                                        numberOfLines={2}
                                     >
                                         {isSelectingChapters
                                             ? selectedChapters.length
@@ -1424,7 +1436,7 @@ const MangaDetails = () => {
                                                         type: 'spring',
                                                         duration: 2500,
                                                     }}
-                                                    className='flex items-center justify-center'
+                                                    className='flex flex-1 shrink-0 items-center justify-center'
                                                 >
                                                     <ArrowDownToLineIcon
                                                         size={24}

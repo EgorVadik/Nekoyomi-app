@@ -6,6 +6,7 @@ import {
     UpdateTable,
 } from '@/db/schema'
 import { BASE_URL } from '@/lib/constants'
+import { type QueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { clsx, type ClassValue } from 'clsx'
 import { eq, inArray } from 'drizzle-orm'
@@ -39,11 +40,13 @@ export const updateLibrary = async ({
     totalChapters,
     savedMangaId,
     chaptersCount,
+    queryClient,
 }: {
     title: string
     totalChapters: number
     savedMangaId: number
     chaptersCount: number
+    queryClient?: QueryClient
 }) => {
     const backendData = await getMangaDetailsRequest({
         title,
@@ -67,13 +70,13 @@ export const updateLibrary = async ({
         newChaptersDifference,
     )
 
-    const res = await Promise.all([
+    await Promise.all([
         db
             .update(SavedMangaTable)
             .set({
                 chapters: backendData.chapters,
             })
-            .where(eq(SavedMangaTable.slug, title)),
+            .where(eq(SavedMangaTable.id, savedMangaId)),
         db.insert(UpdateTable).values(
             newChapters.map((chapter) => ({
                 savedMangaId,
@@ -82,7 +85,10 @@ export const updateLibrary = async ({
         ),
     ])
 
-    console.log({ res })
+    if (queryClient) {
+        queryClient.invalidateQueries({ queryKey: ['updates'] })
+        queryClient.invalidateQueries({ queryKey: ['saved-manga'] })
+    }
 
     return {
         success: true,

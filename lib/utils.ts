@@ -1,17 +1,19 @@
 import { db } from '@/db'
 import {
+    DownloadedChaptersTable,
     HistoryTable,
     ReadChaptersTable,
     SavedMangaTable,
     UpdateTable,
 } from '@/db/schema'
+import { getMangaDetailsRequest } from '@/lib/api'
 import { BASE_URL } from '@/lib/constants'
+import type { SortOptions } from '@/lib/types'
 import { type QueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { clsx, type ClassValue } from 'clsx'
 import { eq, inArray } from 'drizzle-orm'
 import { twMerge } from 'tailwind-merge'
-import { getMangaDetailsRequest } from './api'
 
 export const api = axios.create({
     baseURL: BASE_URL,
@@ -99,7 +101,7 @@ export const updateLibrary = async ({
 export const getLibrary = async () => {
     const savedManga = await db.select().from(SavedMangaTable)
 
-    const [readChapters, history] = await Promise.all([
+    const [readChapters, history, downloadedChapters] = await Promise.all([
         db
             .select()
             .from(ReadChaptersTable)
@@ -118,6 +120,15 @@ export const getLibrary = async () => {
                     savedManga.map((manga) => manga.slug),
                 ),
             ),
+        db
+            .select()
+            .from(DownloadedChaptersTable)
+            .where(
+                inArray(
+                    DownloadedChaptersTable.mangaSlug,
+                    savedManga.map((manga) => manga.slug),
+                ),
+            ),
     ])
 
     const mangaWithUnreadCount = savedManga.map((manga) => ({
@@ -129,7 +140,68 @@ export const getLibrary = async () => {
             (manga.chapters?.totalChapters ?? 0) -
             readChapters.filter((chapter) => chapter.mangaSlug === manga.slug)
                 .length,
+        hasDownloadedChapters:
+            downloadedChapters.filter(
+                (chapter) => chapter.mangaSlug === manga.slug,
+            ).length > 0,
     }))
 
     return mangaWithUnreadCount
+}
+
+export const sortLibrary = (
+    library: Awaited<ReturnType<typeof getLibrary>>,
+    options: SortOptions,
+) => {
+    const currentSort = Object.entries(options).find(([_, value]) => value)
+
+    if (!currentSort) return library
+
+    const [key, value] = currentSort
+
+    return library.sort((a, b) => {
+        if (key === 'alphabetical') {
+            return a.title.localeCompare(b.title) * (value === 'asc' ? 1 : -1)
+        }
+
+        if (key === 'lastRead') {
+            return (
+                (a.lastRead.getTime() - b.lastRead.getTime()) *
+                (value === 'asc' ? 1 : -1)
+            )
+        }
+
+        if (key === 'totalChapters') {
+            return (
+                ((a.chapters?.totalChapters ?? 0) -
+                    (b.chapters?.totalChapters ?? 0)) *
+                (value === 'asc' ? 1 : -1)
+            )
+        }
+
+        if (key === 'unreadCount') {
+            return (
+                (a.unReadChaptersCount - b.unReadChaptersCount) *
+                (value === 'asc' ? 1 : -1)
+            )
+        }
+
+        if (key === 'lastUpdated') {
+            return (
+                (new Date(a.lastUpdated ?? new Date()).getTime() -
+                    new Date(b.lastUpdated ?? new Date()).getTime()) *
+                (value === 'asc' ? 1 : -1)
+            )
+        }
+
+        if (key === 'dateAdded') {
+            return (
+                ((a.createdAt?.getTime() ?? 0) -
+                    (b.createdAt?.getTime() ?? 0)) *
+                (value === 'asc' ? 1 : -1)
+            )
+        }
+
+        return 0
+    })
 }

@@ -9,8 +9,8 @@ import BottomSheet, {
 import { Stack, usePathname, useRouter } from 'expo-router'
 import { useAtom } from 'jotai'
 import { Clock, Heart, ListFilter } from 'lucide-react-native'
-import { useCallback, useRef, useState } from 'react'
-import { Text, TouchableOpacity, View } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BackHandler, Text, TouchableOpacity, View } from 'react-native'
 
 export default function BrowseLayout() {
     const router = useRouter()
@@ -22,6 +22,7 @@ export default function BrowseLayout() {
     const [status, setStatus] = useState<'All' | 'Ongoing' | 'Completed'>('All')
     const [category, setCategory] = useState<(typeof GENRES)[number]>('All')
     const [filters, setFilters] = useAtom(filterAtom)
+    const [isExpanded, setIsExpanded] = useState(false)
 
     const handleSnapPress = useCallback(() => {
         bottomSheetRef.current?.expand()
@@ -46,6 +47,24 @@ export default function BrowseLayout() {
             genre: category,
         })
     }
+
+    const handleChange = (index: number) => {
+        setIsExpanded(index === 0)
+    }
+
+    useEffect(() => {
+        if (!isExpanded) return
+
+        const backHandler = BackHandler.addEventListener(
+            'hardwareBackPress',
+            () => {
+                bottomSheetRef.current?.close()
+                return true
+            },
+        )
+
+        return () => backHandler.remove()
+    }, [isExpanded])
 
     return (
         <View className='flex-1 bg-[#121218]'>
@@ -175,6 +194,7 @@ export default function BrowseLayout() {
 
             <BottomSheet
                 ref={bottomSheetRef}
+                onChange={handleChange}
                 enableDynamicSizing
                 enablePanDownToClose
                 index={-1}

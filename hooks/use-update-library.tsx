@@ -36,6 +36,7 @@ export const useUpdateLibrary = () => {
                     return res
                 }
                 ToastAndroid.show('No new chapters found', ToastAndroid.SHORT)
+                return res
             }
 
             await queryClient.invalidateQueries({

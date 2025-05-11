@@ -1,5 +1,5 @@
 import { storage } from '@/lib/storage'
-import React from 'react'
+import type { FilterOptions } from '@/lib/types'
 import { View } from 'react-native'
 import BouncyCheckbox from 'react-native-bouncy-checkbox'
 import { useMMKVObject } from 'react-native-mmkv'
@@ -18,11 +18,11 @@ const options = [
         label: 'Completed',
         value: 'completed',
     },
-]
+] as const
 
 export default function LibraryOptionsModal() {
     const insets = useSafeAreaInsets()
-    const [selected, setSelected] = useMMKVObject<string[]>(
+    const [selected, setSelected] = useMMKVObject<FilterOptions[]>(
         'filter-options',
         storage,
     )

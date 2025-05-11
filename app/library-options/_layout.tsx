@@ -5,7 +5,7 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet'
 import { Portal, PortalProvider } from '@gorhom/portal'
 import { router } from 'expo-router'
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function LibraryOptionsLayout() {

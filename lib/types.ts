@@ -35,3 +35,13 @@ export type ChapterList = {
         slug: string
     }[]
 }
+
+export type FilterOptions = 'downloaded' | 'unread' | 'completed'
+export type SortOptions = Partial<{
+    alphabetical: 'asc' | 'desc' | null
+    lastRead: 'asc' | 'desc' | null
+    totalChapters: 'asc' | 'desc' | null
+    unreadCount: 'asc' | 'desc' | null
+    lastUpdated: 'asc' | 'desc' | null
+    dateAdded: 'asc' | 'desc' | null
+}>

@@ -1,3 +1,4 @@
+import { ZoomableList } from '@/components/zoomable-list'
 import { db } from '@/db'
 import {
     DownloadedChaptersTable,
@@ -141,13 +142,36 @@ const MangaPage = memo(
     },
 )
 
-const SectionSeparator = memo(({ section }: { section: { title: string } }) => (
-    <View className='px-6 py-10'>
-        <Text className='text-2xl text-white'>
-            {capitalize(section.title).replace('-', ' ').replaceAll('-', '.')}
-        </Text>
-    </View>
-))
+const SectionSeparator = memo(
+    ({
+        section,
+        hasNextChapter,
+        currentChapterTitle,
+    }: {
+        section: { title: string }
+        hasNextChapter: boolean
+        currentChapterTitle: string
+    }) => (
+        <View className='px-6 py-10'>
+            <Text className='text-2xl text-white'>
+                {capitalize(section.title)
+                    .replace('-', ' ')
+                    .replaceAll('-', '.')}
+            </Text>
+            {currentChapterTitle === section.title && hasNextChapter && (
+                <Text className='text-sm text-white'>Current Chapter</Text>
+            )}
+
+            {currentChapterTitle === section.title && !hasNextChapter ? (
+                <Text className='text-sm text-white'>Last Chapter</Text>
+            ) : (
+                !(currentChapterTitle === section.title && hasNextChapter) && (
+                    <Text className='text-sm text-white'>Next Chapter</Text>
+                )
+            )}
+        </View>
+    ),
+)
 
 export default function MangaReaderScreen() {
     const queryClient = useQueryClient()
@@ -187,6 +211,7 @@ export default function MangaReaderScreen() {
     }>({})
 
     const debounceTimerRef = useRef<number | null>(null)
+    const sectionListRef = useRef<SectionList>(null)
 
     const toggleControls = useCallback(() => {
         setIsControlsVisible((prev) => {
@@ -429,7 +454,7 @@ export default function MangaReaderScreen() {
     }, [currentChapterTitle, updateHistory])
 
     useEffect(() => {
-        if (currentPage < 3) return
+        if (currentPage !== totalChapterPages && currentPage < 2) return
 
         if (debounceTimerRef.current) {
             clearTimeout(debounceTimerRef.current)
@@ -741,56 +766,33 @@ export default function MangaReaderScreen() {
     return (
         <>
             <View className='flex-1 bg-[#010001]'>
-                {/* <Pressable onPress={toggleControls} className='flex-1'> */}
-                {/* <ReactNativeZoomableView
-                    maxZoom={2.5}
-                    minZoom={1}
-                    zoomStep={Infinity}
-                    visualTouchFeedbackEnabled={false}
-                    disablePanOnInitialZoom
-                    panBoundaryPadding={0}
-                    // onStartShouldSetPanResponderCapture={(e, gestureState) => {
-                    //     console.log({
-                    //         dx: gestureState.dx,
-                    //         dy: gestureState.dy,
-                    //     })
-
-                    //     return (
-                    //         Math.abs(gestureState.dx) > 5 &&
-                    //         Math.abs(gestureState.dy) < 5
-                    //     )
-                    // }}
-                    onMoveShouldSetPanResponderCapture={(_, gestureState) => {
-                        console.log({
-                            dx: gestureState.dx,
-                            dy: gestureState.dy,
-                        })
-
-                        return Math.abs(gestureState.dx) > 3
-                    }}
-                    onSingleTap={toggleControls}
-                    // panEnabled={false}
-                > */}
-                <SectionList
-                    sections={sections}
-                    showsVerticalScrollIndicator={false}
-                    SectionSeparatorComponent={SectionSeparator}
-                    onEndReachedThreshold={0.85}
-                    onEndReached={handleEndReached}
-                    maxToRenderPerBatch={7}
-                    initialNumToRender={7}
-                    windowSize={8}
-                    renderItem={renderItem}
-                    keyExtractor={keyExtractor}
-                    onViewableItemsChanged={handleViewableItemsChanged}
-                    contentContainerStyle={{
-                        paddingBottom: insets.bottom,
-                    }}
-                    disableScrollViewPanResponder
-                    nestedScrollEnabled
-                />
-                {/* </ReactNativeZoomableView> */}
-                {/* </Pressable> */}
+                <ZoomableList onTap={toggleControls}>
+                    <SectionList
+                        ref={sectionListRef}
+                        sections={sections}
+                        showsVerticalScrollIndicator={false}
+                        SectionSeparatorComponent={({ section }) => (
+                            <SectionSeparator
+                                section={section}
+                                hasNextChapter={hasNextChapter}
+                                currentChapterTitle={currentChapterTitle}
+                            />
+                        )}
+                        onEndReachedThreshold={0.85}
+                        onEndReached={handleEndReached}
+                        maxToRenderPerBatch={7}
+                        initialNumToRender={7}
+                        windowSize={8}
+                        renderItem={renderItem}
+                        keyExtractor={keyExtractor}
+                        onViewableItemsChanged={handleViewableItemsChanged}
+                        contentContainerStyle={{
+                            paddingBottom: insets.bottom,
+                        }}
+                        disableScrollViewPanResponder
+                        nestedScrollEnabled
+                    />
+                </ZoomableList>
 
                 {isLoadingNextChapter && (
                     <View className='absolute bottom-24 left-1/2 z-50 -translate-x-1/2 flex-row items-center justify-center rounded-full bg-[#1c1e25]/80 px-6 py-3 shadow-lg'>

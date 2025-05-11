@@ -155,7 +155,8 @@ const ChapterItem = memo(
                             chapter.timeUploaded ?? new Date(),
                         ).toLocaleDateString()}{' '}
                         <Text className='text-xs text-gray-500'>
-                            {chapter.currentPage != null &&
+                            {isRead &&
+                                chapter.currentPage != null &&
                                 chapter.currentPage !== 0 &&
                                 `• Page: ${chapter.currentPage}`}
                         </Text>

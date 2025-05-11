@@ -10,7 +10,7 @@ import { Image } from 'expo-image'
 import { Tabs, useRouter } from 'expo-router'
 import { AlertCircle, BookOpen, Search, Trash2, X } from 'lucide-react-native'
 import { AnimatePresence, motify, MotiText } from 'moti'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
     ActivityIndicator,
     BackHandler,
@@ -43,8 +43,9 @@ export default function HistoryScreen() {
     const insets = useSafeAreaInsets()
     const [showClearDialog, setShowClearDialog] = useState(false)
     const [isSearchActive, setIsSearchActive] = useState(false)
+    const [search, setSearch] = useState('')
 
-    const { mutate: clearHistory, isPending: isClearPending } = useMutation({
+    const { mutate: clearHistory } = useMutation({
         mutationFn: async () => {
             await db.delete(HistoryTable)
         },
@@ -59,33 +60,33 @@ export default function HistoryScreen() {
         setShowClearDialog(true)
     }
 
-    const handleSearch = (text: string) => {
-        queryClient.setQueryData(
-            ['history'],
-            (old: {
-                original: {
-                    title: string
-                    data: (typeof HistoryTable.$inferSelect)[]
-                }[]
-                grouped: {
-                    title: string
-                    data: (typeof HistoryTable.$inferSelect)[]
-                }[]
-            }) => {
-                return {
-                    ...old,
-                    grouped: old.original.map((group) => ({
-                        ...group,
-                        data: group.data.filter((item) =>
-                            item.mangaTitle
-                                .toLowerCase()
-                                .includes(text.toLowerCase()),
-                        ),
-                    })),
-                }
-            },
-        )
-    }
+    // const handleSearch = (text: string) => {
+    //     queryClient.setQueryData(
+    //         ['history'],
+    //         (old: {
+    //             original: {
+    //                 title: string
+    //                 data: (typeof HistoryTable.$inferSelect)[]
+    //             }[]
+    //             grouped: {
+    //                 title: string
+    //                 data: (typeof HistoryTable.$inferSelect)[]
+    //             }[]
+    //         }) => {
+    //             return {
+    //                 ...old,
+    //                 grouped: old.original.map((group) => ({
+    //                     ...group,
+    //                     data: group.data.filter((item) =>
+    //                         item.mangaTitle
+    //                             .toLowerCase()
+    //                             .includes(text.toLowerCase()),
+    //                     ),
+    //                 })),
+    //             }
+    //         },
+    //     )
+    // }
 
     useEffect(() => {
         const handler = BackHandler.addEventListener(
@@ -93,7 +94,7 @@ export default function HistoryScreen() {
             () => {
                 if (isSearchActive) {
                     setIsSearchActive(false)
-                    handleSearch('')
+                    setSearch('')
                     return true
                 }
                 return false
@@ -190,11 +191,27 @@ export default function HistoryScreen() {
                 })
 
             return {
-                original: groups,
                 grouped: groups,
             }
         },
     })
+
+    const filteredHistory = useMemo(() => {
+        if (search === '') return history
+
+        return {
+            grouped: history?.grouped
+                .map((group) => ({
+                    ...group,
+                    data: group.data.filter((item) =>
+                        item.mangaTitle
+                            .toLowerCase()
+                            .includes(search.toLowerCase()),
+                    ),
+                }))
+                .filter((group) => group.data.length > 0),
+        }
+    }, [history, search])
 
     const renderItem = useCallback(
         ({ item }: { item: typeof HistoryTable.$inferSelect }) => (
@@ -286,9 +303,10 @@ export default function HistoryScreen() {
     }
 
     if (
-        !history ||
-        history.grouped.length === 0 ||
-        history.grouped.some((group) => group.data.length === 0)
+        !filteredHistory ||
+        !filteredHistory.grouped ||
+        filteredHistory.grouped.length === 0 ||
+        filteredHistory.grouped.some((group) => group.data.length === 0)
     ) {
         return (
             <View className='flex-1 items-center justify-center bg-[#121218]'>
@@ -347,7 +365,7 @@ export default function HistoryScreen() {
                                             className='h-full flex-1 py-4 text-xl text-white'
                                             autoFocus
                                             cursorColor={'white'}
-                                            onChangeText={handleSearch}
+                                            onChangeText={setSearch}
                                         />
                                     ) : (
                                         <MotiText
@@ -380,7 +398,7 @@ export default function HistoryScreen() {
                                     onPress={() => {
                                         setIsSearchActive(!isSearchActive)
                                         if (isSearchActive) {
-                                            handleSearch('')
+                                            setSearch('')
                                         }
                                     }}
                                 >
@@ -428,7 +446,7 @@ export default function HistoryScreen() {
             />
 
             <SectionList
-                sections={history.grouped}
+                sections={filteredHistory.grouped}
                 renderItem={renderItem}
                 renderSectionHeader={({ section }) =>
                     renderSectionHeader({ title: section.title })

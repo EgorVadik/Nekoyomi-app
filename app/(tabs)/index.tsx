@@ -1,6 +1,8 @@
 import { MangaCard } from '@/components/manga-card'
 import { useUpdateLibrary } from '@/hooks/use-update-library'
-import { getLibrary } from '@/lib/utils'
+import { storage } from '@/lib/storage'
+import type { FilterOptions, SortOptions } from '@/lib/types'
+import { getLibrary, sortLibrary } from '@/lib/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { FlashList } from '@shopify/flash-list'
 import { useQuery } from '@tanstack/react-query'
@@ -11,13 +13,12 @@ import {
     BookOpen,
     Compass,
     ListFilter,
-    MoreVertical,
     RefreshCw,
     Search,
     X,
 } from 'lucide-react-native'
 import { AnimatePresence, motify, MotiText } from 'moti'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
     ActivityIndicator,
     BackHandler,
@@ -26,6 +27,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
+import { useMMKVObject } from 'react-native-mmkv'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const AnimatedTextInput = motify(TextInput)()
@@ -35,11 +37,11 @@ const AnimatedX = motify(X)()
 export default function LibraryScreen() {
     const headerHeight = useHeaderHeight()
     const insets = useSafeAreaInsets()
+    const [selected] = useMMKVObject<FilterOptions[]>('filter-options', storage)
+    const [sortOptions] = useMMKVObject<SortOptions>('sort-options', storage)
+    const [search, setSearch] = useState('')
     const [retry, setRetry] = useState(false)
     const [isSearchActive, setIsSearchActive] = useState(false)
-    const [filteredData, setFilteredData] = useState<
-        Awaited<ReturnType<typeof getLibrary>>
-    >([])
     const { data, error, isLoading } = useQuery({
         queryKey: ['saved-manga'],
         queryFn: async () => {
@@ -47,7 +49,6 @@ export default function LibraryScreen() {
             const sortedData = mangaWithUnreadCount.sort(
                 (a, b) => b.lastRead.getTime() - a.lastRead.getTime(),
             )
-            setFilteredData(sortedData)
             return sortedData
         },
         refetchOnMount: 'always',
@@ -97,13 +98,57 @@ export default function LibraryScreen() {
         })
     }
 
+    const filteredData = useMemo(() => {
+        const completed = selected?.includes('completed')
+        const downloaded = selected?.includes('downloaded')
+        const unread = selected?.includes('unread')
+
+        const isNothing = !completed && !unread && !downloaded
+
+        if (search === '') {
+            return sortLibrary(
+                (data ?? []).filter((manga) => {
+                    const completedFilter =
+                        completed && manga.status === 'Completed'
+                    const unreadFilter = unread && manga.unReadChaptersCount > 0
+                    const downloadedFilter =
+                        downloaded && manga.hasDownloadedChapters
+
+                    return isNothing
+                        ? data
+                        : completedFilter || unreadFilter || downloadedFilter
+                }),
+                sortOptions ?? { lastRead: 'desc' },
+            )
+        }
+
+        return sortLibrary(
+            (data ?? []).filter((manga) => {
+                const searchFilter = manga.title
+                    .toLowerCase()
+                    .includes(search.toLowerCase())
+                const completedFilter =
+                    completed && manga.status === 'Completed'
+                const unreadFilter = unread && manga.unReadChaptersCount > 0
+                const downloadedFilter =
+                    downloaded && manga.hasDownloadedChapters
+
+                return isNothing
+                    ? searchFilter
+                    : searchFilter &&
+                          (completedFilter || unreadFilter || downloadedFilter)
+            }),
+            sortOptions ?? { lastRead: 'desc' },
+        )
+    }, [data, search, selected, sortOptions])
+
     useEffect(() => {
         const backHandler = BackHandler.addEventListener(
             'hardwareBackPress',
             () => {
                 if (isSearchActive) {
                     setIsSearchActive(false)
-                    setFilteredData(data ?? [])
+                    setSearch('')
                     return true
                 }
                 return false
@@ -212,16 +257,7 @@ export default function LibraryScreen() {
                                             className='flex-1 py-0.5 text-lg'
                                             autoFocus
                                             onChangeText={(text) => {
-                                                setFilteredData(
-                                                    (data ?? []).filter(
-                                                        (manga) =>
-                                                            manga.title
-                                                                .toLowerCase()
-                                                                .includes(
-                                                                    text.toLowerCase(),
-                                                                ),
-                                                    ),
-                                                )
+                                                setSearch(text)
                                             }}
                                         />
                                     ) : (
@@ -296,13 +332,6 @@ export default function LibraryScreen() {
                                         }
                                     >
                                         <ListFilter size={24} color={'white'} />
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity>
-                                        <MoreVertical
-                                            size={24}
-                                            color={'white'}
-                                        />
                                     </TouchableOpacity>
                                 </View>
                             </View>
